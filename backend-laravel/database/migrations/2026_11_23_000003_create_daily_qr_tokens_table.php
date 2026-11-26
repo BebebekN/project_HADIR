@@ -11,14 +11,25 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('daily_qr_tokens', function (Blueprint $table) {
-            $table->id();
-            $table->date('tanggal')->unique();
-            $table->string('token', 64)->unique();
-            $table->time('jam_mulai')->default('06:00:00');
-            $table->time('jam_selesai')->default('17:00:00');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('daily_qr_tokens')) {
+            Schema::create('daily_qr_tokens', function (Blueprint $table) {
+                $table->id();
+                $table->date('tanggal')->unique();
+                $table->string('token', 64)->unique();
+                $table->time('jam_mulai')->default('06:00:00');
+                $table->time('jam_selesai')->default('17:00:00');
+                $table->timestamps();
+            });
+        } else {
+            Schema::table('daily_qr_tokens', function (Blueprint $table) {
+                if (!Schema::hasColumn('daily_qr_tokens', 'created_at')) {
+                    $table->timestamp('created_at')->nullable();
+                }
+                if (!Schema::hasColumn('daily_qr_tokens', 'updated_at')) {
+                    $table->timestamp('updated_at')->nullable();
+                }
+            });
+        }
     }
 
     /**

@@ -202,11 +202,14 @@ export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownlo
           <span>Keluar</span>
         </button>
 
-        {user?.role === 'admin' &&
-          typeof window !== 'undefined' &&
-          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+        {user?.role === 'admin' && (
           <a
-            href="http://127.0.0.1:8000/admin"
+            href={
+              typeof window !== 'undefined' &&
+              (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+                ? 'http://127.0.0.1:8000/admin'
+                : 'https://project-hadir-admin.vercel.app/admin'
+            }
             target="_blank"
             rel="noreferrer"
             className="w-full py-3 px-6 rounded-full bg-white border border-[#e3e1ec] hover:bg-[#f0f0ff] text-[#0055ff] font-semibold text-[13px] transition-all flex items-center justify-center gap-2"

@@ -65,27 +65,24 @@ export default function LoginPage({ onLoginSuccess }) {
   const isLocalHost =
     typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const adminUrl = isLocalHost
+    ? 'http://127.0.0.1:8000/admin'
+    : 'https://project-hadir-admin.vercel.app/admin';
 
   return (
     <div className="min-h-screen bg-[#f0f0ff] lg:grid lg:grid-cols-12 flex flex-col">
       {/* Left Visual Column */}
       <div className="lg:col-span-5 bg-[#f0f0ff] px-6 py-6 lg:p-12 flex flex-col justify-between">
         <div className="flex items-center justify-between w-full">
-          {isLocalHost ? (
-            <a
-              href="http://127.0.0.1:8000/admin"
-              target="_blank"
-              rel="noreferrer"
-              title="Panel Admin Filament"
-              className="w-10 h-10 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-[#122B51] shadow-xs transition-all"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </a>
-          ) : (
-            <span className="px-3 py-1.5 rounded-full bg-white text-[11px] font-bold text-[#0055ff] shadow-xs">
-              Cloud Online
-            </span>
-          )}
+          <a
+            href={adminUrl}
+            target="_blank"
+            rel="noreferrer"
+            title="Panel Admin Filament"
+            className="w-10 h-10 rounded-full bg-white/80 hover:bg-white flex items-center justify-center text-[#122B51] shadow-xs transition-all"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </a>
 
           <HadirLogo />
         </div>
@@ -104,20 +101,15 @@ export default function LoginPage({ onLoginSuccess }) {
         </div>
 
         <p className="hidden lg:block text-[12px] text-[#5d6367]">
-          Butuh bantuan akun? Hubungi Wali Kelas (<strong>Firda Ayu Nirmala, S.Kom</strong>)
-          {isLocalHost && (
-            <>
-              {' '}atau{' '}
-              <a
-                href="http://127.0.0.1:8000/admin"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#0055ff] font-semibold hover:underline"
-              >
-                Panel Admin (/admin)
-              </a>
-            </>
-          )}
+          Butuh bantuan akun? Hubungi Wali Kelas (<strong>Firda Ayu Nirmala, S.Kom</strong>) atau{' '}
+          <a
+            href={adminUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#0055ff] font-semibold hover:underline"
+          >
+            Panel Admin Filament (/admin)
+          </a>
           .
         </p>
       </div>

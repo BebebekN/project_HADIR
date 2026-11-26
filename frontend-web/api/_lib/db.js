@@ -66,7 +66,9 @@ async function initSchemaAndSeed(sql) {
       nama_kegiatan VARCHAR(150) NOT NULL,
       nama_guru VARCHAR(150),
       jam_mulai VARCHAR(10) NOT NULL,
-      jam_selesai VARCHAR(10) NOT NULL
+      jam_selesai VARCHAR(10) NOT NULL,
+      created_at TIMESTAMP NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NULL DEFAULT NOW()
     )
   `;
 
@@ -79,6 +81,8 @@ async function initSchemaAndSeed(sql) {
       jam_pulang VARCHAR(10),
       status VARCHAR(30),
       poin_perubahan INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NULL DEFAULT NOW(),
       UNIQUE(user_id, tanggal)
     )
   `;
@@ -89,9 +93,18 @@ async function initSchemaAndSeed(sql) {
       tanggal DATE UNIQUE NOT NULL,
       token VARCHAR(100) NOT NULL,
       jam_mulai VARCHAR(10) DEFAULT '06:00:00',
-      jam_selesai VARCHAR(10) DEFAULT '17:00:00'
+      jam_selesai VARCHAR(10) DEFAULT '17:00:00',
+      created_at TIMESTAMP NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NULL DEFAULT NOW()
     )
   `;
+
+  await sql`ALTER TABLE jadwals ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE jadwals ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE presensis ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE presensis ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL DEFAULT NOW()`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS api_tokens (

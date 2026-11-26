@@ -11,16 +11,27 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('jadwals', function (Blueprint $table) {
-            $table->id();
-            $table->string('kelas', 30);
-            $table->enum('hari', ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
-            $table->string('nama_kegiatan', 150);
-            $table->string('nama_guru', 150);
-            $table->time('jam_mulai');
-            $table->time('jam_selesai');
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('jadwals')) {
+            Schema::create('jadwals', function (Blueprint $table) {
+                $table->id();
+                $table->string('kelas', 30);
+                $table->enum('hari', ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
+                $table->string('nama_kegiatan', 150);
+                $table->string('nama_guru', 150);
+                $table->time('jam_mulai');
+                $table->time('jam_selesai');
+                $table->timestamps();
+            });
+        } else {
+            Schema::table('jadwals', function (Blueprint $table) {
+                if (!Schema::hasColumn('jadwals', 'created_at')) {
+                    $table->timestamp('created_at')->nullable();
+                }
+                if (!Schema::hasColumn('jadwals', 'updated_at')) {
+                    $table->timestamp('updated_at')->nullable();
+                }
+            });
+        }
     }
 
     /**
