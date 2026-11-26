@@ -13,10 +13,17 @@ mkdir -p /var/www/html/storage/framework/sessions \
          /var/www/html/storage/logs
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Sync schema safely on shared Neon Postgres without dropping existing Node API data
-if ! php artisan migrate --force; then
-    sleep 2
-    php artisan migrate --force || echo "Warning: migration check deferred"
-fi
+# Sync schema safely on shared Neon Postgres without dropping existing Node API data.
+# Retry briefly in case Neon compute is waking from suspend or containers race on boot.
+for attempt in 1 2 3; do
+    if php artisan migrate --force --no-interaction; then
+        break
+    fi
+    if [ "$attempt" -eq 3 ]; then
+        echo "Error: database migration failed after 3 attempts" >&2
+        exit 1
+    fi
+    sleep 3
+done
 
 exec apache2-foreground

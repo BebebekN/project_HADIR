@@ -24,6 +24,10 @@ return new class extends Migration
                 $table->rememberToken();
                 $table->timestamps();
             });
+        } elseif (!Schema::hasColumn('users', 'remember_token')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->rememberToken();
+            });
         }
 
         if (!Schema::hasTable('password_reset_tokens')) {
