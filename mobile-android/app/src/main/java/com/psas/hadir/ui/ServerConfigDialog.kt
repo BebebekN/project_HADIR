@@ -39,14 +39,15 @@ object ServerConfigDialog {
 
         val input = EditText(context).apply {
             setText(sessionManager.getBaseUrl())
-            hint = SessionManager.DEFAULT_LAN_BASE_URL
+            hint = SessionManager.DEFAULT_CLOUD_BASE_URL
             setPadding((14 * dp).toInt(), (10 * dp).toInt(), (14 * dp).toInt(), (10 * dp).toInt())
             setBackgroundResource(R.drawable.bg_input_pill)
             textSize = 13f
         }
 
         val presets = listOf(
-            "Wi-Fi PC Saat Ini (172.23.166.32)" to SessionManager.DEFAULT_LAN_BASE_URL,
+            "Cloud Online Vercel (Semua HP)" to SessionManager.DEFAULT_CLOUD_BASE_URL,
+            "Wi-Fi PC Lokal (172.23.166.32)" to SessionManager.DEFAULT_LAN_BASE_URL,
             "Kabel USB (ADB Reverse 127.0.0.1)" to SessionManager.DEFAULT_USB_BASE_URL,
             "Emulator Android Studio (10.0.2.2)" to SessionManager.DEFAULT_EMULATOR_BASE_URL
         )

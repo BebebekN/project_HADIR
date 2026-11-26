@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2,
   AlertTriangle,
   Clock,
   Printer,
   Search,
+  QrCode,
+  RefreshCw,
 } from 'lucide-react';
-import { dashboardApi } from '../services/api';
+import QRCode from 'qrcode';
+import { adminApi, dashboardApi } from '../services/api';
 
 const CLASSES = ['XI PPLG 4'];
 
@@ -18,6 +21,33 @@ export default function MonitoringGuruPage() {
   const [monitoringData, setMonitoringData] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [qrInfo, setQrInfo] = useState(null);
+  const [qrImg, setQrImg] = useState('');
+  const [qrBusy, setQrBusy] = useState(false);
+
+  const loadQr = useCallback(async (regenerate = false) => {
+    try {
+      setQrBusy(true);
+      const res = regenerate ? await adminApi.regenerateQr() : await adminApi.getQr();
+      if (res.success && res.data?.payload) {
+        setQrInfo(res.data);
+        const url = await QRCode.toDataURL(res.data.payload, {
+          width: 220,
+          margin: 1,
+          color: { dark: '#122B51', light: '#FFFFFF' },
+        });
+        setQrImg(url);
+      }
+    } catch {
+      // Optional on local PHP backend if route not mounted
+    } finally {
+      setQrBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadQr(false);
+  }, [loadQr]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +157,46 @@ export default function MonitoringGuruPage() {
           <div className="text-2xl font-bold mt-1">★ {ringkasan.rata_rata_bintang}</div>
         </div>
       </div>
+
+      {/* QR Presensi Hari Ini (Tampil di Cloud Vercel untuk di-scan Siswa) */}
+      {qrInfo?.token && (
+        <div className="bg-white rounded-[24px] p-5 sm:p-6 border border-[#e3e1ec]/70 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-5 print:hidden">
+          <div className="flex items-center gap-4">
+            {qrImg ? (
+              <img
+                src={qrImg}
+                alt="QR Presensi Hari Ini"
+                className="w-28 h-28 rounded-2xl border border-[#e3e1ec] p-1.5 bg-white shrink-0"
+              />
+            ) : (
+              <div className="w-28 h-28 rounded-2xl bg-[#f0f0ff] flex items-center justify-center shrink-0">
+                <QrCode className="w-10 h-10 text-[#0055ff]" />
+              </div>
+            )}
+            <div className="space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[#0055ff]">
+                QR Presensi Resmi Hari Ini ({qrInfo.tanggal_label || qrInfo.tanggal})
+              </div>
+              <div className="text-[18px] font-mono font-bold text-[#122B51]">
+                {qrInfo.token}
+              </div>
+              <p className="text-[12px] text-[#5d6367]">
+                Berlaku pukul {qrInfo.jam_mulai}–{qrInfo.jam_selesai} WIB di kawasan SMK Telkom Purwokerto.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={qrBusy}
+            onClick={() => loadQr(true)}
+            className="px-5 py-2.5 rounded-full bg-[#f0f0ff] hover:bg-[#e2e5ff] text-[#0055ff] text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${qrBusy ? 'animate-spin' : ''}`} />
+            <span>Buat Token QR Baru</span>
+          </button>
+        </div>
+      )}
 
       {/* Main Student Table */}
       <div className="bg-white rounded-[24px] border border-[#e3e1ec]/50 shadow-xs overflow-hidden print:border-none print:shadow-none">

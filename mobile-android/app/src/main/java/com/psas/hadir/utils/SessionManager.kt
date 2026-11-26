@@ -39,12 +39,21 @@ class SessionManager(context: Context) {
 
     fun resolveAvatarUrl(user: UserDto? = getUser()): String? {
         if (user == null) return null
+        val directUrl = user.avatarUrl
+        if (!directUrl.isNullOrBlank() &&
+            (directUrl.startsWith("http://") || directUrl.startsWith("https://"))
+        ) {
+            return directUrl
+        }
         val path = user.avatarPath
         if (!path.isNullOrBlank()) {
+            if (path.startsWith("http://") || path.startsWith("https://")) {
+                return path
+            }
             val origin = getBaseUrl().trimEnd('/').removeSuffix("/api/v1")
             return "$origin/${path.trimStart('/')}"
         }
-        return user.avatarUrl
+        return directUrl
     }
 
     fun saveBaseUrl(url: String) {
@@ -61,7 +70,7 @@ class SessionManager(context: Context) {
         if (isCustom && !saved.isNullOrBlank()) {
             return saved
         }
-        return if (isEmulator()) DEFAULT_EMULATOR_BASE_URL else DEFAULT_LAN_BASE_URL
+        return if (isEmulator()) DEFAULT_EMULATOR_BASE_URL else DEFAULT_CLOUD_BASE_URL
     }
 
     fun clearSession() {
@@ -85,6 +94,7 @@ class SessionManager(context: Context) {
         private const val KEY_BASE_URL = "api_base_url"
         private const val KEY_IS_CUSTOM_URL = "api_base_url_custom"
 
+        const val DEFAULT_CLOUD_BASE_URL = "https://project-hadir.vercel.app/api/v1/"
         const val DEFAULT_EMULATOR_BASE_URL = "http://10.0.2.2:8000/api/v1/"
         const val DEFAULT_LAN_BASE_URL = "http://172.23.166.32:8000/api/v1/"
         const val DEFAULT_USB_BASE_URL = "http://127.0.0.1:8000/api/v1/"

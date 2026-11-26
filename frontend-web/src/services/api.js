@@ -1,11 +1,28 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
-export const API_ORIGIN = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+const isLocalBrowser =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (isLocalBrowser ? 'http://127.0.0.1:8000/api/v1' : '/api/v1');
+
+export const API_ORIGIN = API_BASE_URL.startsWith('http')
+  ? API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+  : typeof window !== 'undefined'
+  ? window.location.origin
+  : '';
 
 export function resolveAvatarUrl(user) {
   if (!user) return null;
+  if (user.avatar_url && /^https?:\/\//i.test(user.avatar_url)) {
+    return user.avatar_url;
+  }
   if (user.avatar_path) {
+    if (/^https?:\/\//i.test(user.avatar_path)) {
+      return user.avatar_path;
+    }
     return `${API_ORIGIN}/${String(user.avatar_path).replace(/^\/+/, '')}`;
   }
   return user.avatar_url || null;
@@ -14,20 +31,23 @@ export function resolveAvatarUrl(user) {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Accept': 'application/json',
+    Accept: 'application/json',
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
 });
 
-// Request interceptor to attach Sanctum token
-apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('psas_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-}, (error) => Promise.reject(error));
+// Request interceptor to attach Bearer token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('psas_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // Response interceptor to handle session expiration
 apiClient.interceptors.response.use(
@@ -70,7 +90,13 @@ export const jadwalApi = {
 
 export const dashboardApi = {
   siswa: () => apiClient.get('/dashboard'),
-  guruMonitoring: (kelas, tanggal) => apiClient.get('/guru/monitoring', { params: { kelas, tanggal } }),
+  guruMonitoring: (kelas, tanggal) =>
+    apiClient.get('/guru/monitoring', { params: { kelas, tanggal } }),
+};
+
+export const adminApi = {
+  getQr: () => apiClient.get('/admin/qr'),
+  regenerateQr: () => apiClient.post('/admin/qr'),
 };
 
 export default apiClient;

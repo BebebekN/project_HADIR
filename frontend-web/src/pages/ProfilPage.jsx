@@ -202,7 +202,9 @@ export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownlo
           <span>Keluar</span>
         </button>
 
-        {user?.role === 'admin' && (
+        {user?.role === 'admin' &&
+          typeof window !== 'undefined' &&
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
           <a
             href="http://127.0.0.1:8000/admin"
             target="_blank"

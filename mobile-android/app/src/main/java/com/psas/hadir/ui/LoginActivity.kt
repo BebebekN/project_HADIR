@@ -150,6 +150,7 @@ class LoginActivity : AppCompatActivity() {
         if (SessionManager.isEmulator()) return false
 
         val candidates = listOf(
+            SessionManager.DEFAULT_CLOUD_BASE_URL,
             SessionManager.DEFAULT_USB_BASE_URL,
             SessionManager.DEFAULT_LAN_BASE_URL
         ).distinct().filter { it != previousUrl }
