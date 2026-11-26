@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">HADIR</string>
+    <string name="app_subtitle">Presensi QR, Jadwal XI PPLG 4 &amp; Rapor PKL</string>
+    <string name="login_title">Selamat Datang</string>
+    <string name="login_subtitle">Masuk dengan NIS siswa XI PPLG 4 atau NIP guru Anda</string>
+    <string name="hint_nis_nip">Masukkan NIS atau NIP</string>
+    <string name="hint_password">Masukkan kata sandi</string>
+    <string name="btn_login">Masuk</string>
+    <string name="today_schedule_title">Jadwal Hari Ini</string>
+    <string name="weekend_title">Libur Akhir Pekan</string>
+    <string name="weekend_subtitle">Tidak ada jadwal pelajaran pada hari Sabtu &amp; Minggu. Selamat beristirahat!</string>
+    <string name="scan_qr_title">Scan QR Code</string>
+    <string name="scan_qr_hint">Arahkan QR ke dalam kotak</string>
+</resources>

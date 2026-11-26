@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ProjectPSAS" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorPrimaryContainer">@color/lavender_bg</item>
+        <item name="colorSecondary">@color/badge_green_text</item>
+        <item name="android:colorBackground">@color/canvas_bg</item>
+        <item name="android:statusBarColor">@color/canvas_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/white</item>
+    </style>
+
+    <style name="Theme.ProjectPSAS.Login" parent="Theme.ProjectPSAS">
+        <item name="android:statusBarColor">@color/lavender_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/white</item>
+    </style>
+</resources>

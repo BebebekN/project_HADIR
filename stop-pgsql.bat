@@ -1,0 +1,3 @@
+@echo off
+echo Menghentikan Server PostgreSQL...
+"d:\HADIR\pgsql\bin\pg_ctl.exe" -D "d:\HADIR\pgsql\data" stop

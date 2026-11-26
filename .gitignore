@@ -1,0 +1,41 @@
+# PostgreSQL local runtime binaries & data
+/pgsql/
+/pgsql_temp/
+
+# Laravel backend generated/env/uploads
+/backend-laravel/vendor/
+/backend-laravel/node_modules/
+/backend-laravel/.env
+/backend-laravel/.env.backup
+/backend-laravel/.env.production
+/backend-laravel/public/build/
+/backend-laravel/public/hot/
+/backend-laravel/public/storage/
+/backend-laravel/public/uploads/
+/backend-laravel/storage/logs/*.log
+/backend-laravel/storage/framework/cache/*
+!/backend-laravel/storage/framework/cache/.gitignore
+/backend-laravel/storage/framework/sessions/*
+!/backend-laravel/storage/framework/sessions/.gitignore
+/backend-laravel/storage/framework/views/*
+!/backend-laravel/storage/framework/views/.gitignore
+/backend-laravel/.phpunit.result.cache
+
+# Frontend build & dependencies
+/frontend-web/node_modules/
+/frontend-web/dist/
+/frontend-web/dist-ssr/
+/frontend-web/.env.local
+
+# Android build artifacts & local SDK paths
+/mobile-android/.gradle/
+/mobile-android/.idea/
+/mobile-android/.kotlin/
+/mobile-android/local.properties
+/mobile-android/app/build/
+/mobile-android/build/
+
+# Vercel & OS
+/.vercel/
+.DS_Store
+Thumbs.db

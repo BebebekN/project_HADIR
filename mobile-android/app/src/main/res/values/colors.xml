@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Figma Project-PSAS "HadirKu" Brand & Surface Palette -->
+    <color name="brand_blue">#0055FF</color>
+    <color name="brand_blue_dark">#0044CC</color>
+    <color name="brand_blue_soft">#E8EEFF</color>
+    <color name="lavender_bg">#F0F0FF</color>
+    <color name="canvas_bg">#F8F8FD</color>
+    <color name="border_light">#E3E1EC</color>
+    <color name="text_primary">#1B1B23</color>
+    <color name="text_muted">#5D6367</color>
+
+    <!-- Status Badges -->
+    <color name="badge_green_bg">#DDF8EB</color>
+    <color name="badge_green_text">#135E3D</color>
+    <color name="badge_orange_bg">#FFEAD5</color>
+    <color name="badge_orange_text">#9A3412</color>
+    <color name="badge_red_bg">#FFE4E6</color>
+    <color name="danger_red">#DC2626</color>
+    <color name="scanner_dark">#111827</color>
+
+    <!-- Standard & Compatibility Colors -->
+    <color name="white">#FFFFFF</color>
+    <color name="slate_950">#020617</color>
+    <color name="slate_900">#1B1B23</color>
+    <color name="slate_800">#1E293B</color>
+    <color name="slate_700">#334155</color>
+    <color name="slate_500">#5D6367</color>
+    <color name="slate_400">#94A3B8</color>
+    <color name="slate_200">#E3E1EC</color>
+    <color name="slate_100">#F0F0FF</color>
+    <color name="slate_50">#F8F8FD</color>
+
+    <color name="emerald_950">#022C22</color>
+    <color name="emerald_700">#135E3D</color>
+    <color name="emerald_600">#135E3D</color>
+    <color name="emerald_500">#10B981</color>
+    <color name="emerald_400">#34D399</color>
+    <color name="emerald_200">#A7F3D0</color>
+    <color name="emerald_100">#DDF8EB</color>
+    <color name="emerald_50">#ECFDF5</color>
+
+    <color name="teal_600">#0055FF</color>
+    <color name="teal_500">#0055FF</color>
+    <color name="teal_50">#F0F0FF</color>
+
+    <color name="amber_500">#F59E0B</color>
+    <color name="amber_400">#FBBF24</color>
+    <color name="amber_100">#FFEAD5</color>
+    <color name="amber_50">#FFFBEB</color>
+    <color name="amber_800">#9A3412</color>
+
+    <color name="rose_600">#DC2626</color>
+    <color name="rose_500">#EF4444</color>
+    <color name="rose_100">#FFE4E6</color>
+    <color name="rose_50">#FFF1F2</color>
+
+    <color name="blue_500">#0055FF</color>
+    <color name="blue_100">#E8EEFF</color>
+    <color name="blue_50">#F0F0FF</color>
+</resources>
