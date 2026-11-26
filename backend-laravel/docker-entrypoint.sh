@@ -14,6 +14,9 @@ mkdir -p /var/www/html/storage/framework/sessions \
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Sync schema safely on shared Neon Postgres without dropping existing Node API data
-php artisan migrate --force || echo "Warning: migration check deferred"
+if ! php artisan migrate --force; then
+    sleep 2
+    php artisan migrate --force || echo "Warning: migration check deferred"
+fi
 
 exec apache2-foreground

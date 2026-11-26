@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+/php.ini
+/.user.ini
+/public/.user.ini
 /vendor
 /node_modules
 /public/build

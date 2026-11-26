@@ -43,7 +43,9 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 
 COPY . .
 
-RUN mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache/data storage/logs bootstrap/cache \
+RUN rm -f /var/www/html/php.ini /var/www/html/.user.ini /var/www/html/public/.user.ini \
+    && php -m | grep -i pdo_pgsql \
+    && mkdir -p storage/framework/sessions storage/framework/views storage/framework/cache/data storage/logs bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache \
     && composer dump-autoload --optimize \
     && php artisan package:discover --ansi \
