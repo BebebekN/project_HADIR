@@ -1,9 +1,14 @@
 import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 import { del, put } from '@vercel/blob';
 import {
   authenticateBearer,
   ensureDbReady,
+  ensureTodayQrToken,
   formatUserPayload,
+  regenerateTodayQrToken,
+  resolveKbmEndForSubject,
   resolveSubject,
   verifyPassword,
 } from './_lib/db.js';
@@ -13,6 +18,7 @@ import {
   buildAttendanceNotification,
   calculateBintang,
   calculateDistanceMeters,
+  defaultEmailFor,
   formatIndoDate,
   formatShortIndoDate,
   getDayIndex,
@@ -84,30 +90,35 @@ async function handleRequest(request, method) {
     // 1. POST /api/v1/login
     if (method === 'POST' && path === '/login') {
       const body = await request.json().catch(() => ({}));
-      const nisNip = String(body.nis_nip || '').trim();
+      const identifier = String(body.email || body.login || body.nis_nip || '').trim();
       const password = String(body.password || '');
 
-      if (!nisNip || !password) {
+      if (!identifier || !password) {
         return json(
           {
             success: false,
             message: 'Validasi gagal.',
             errors: {
-              ...(nisNip ? {} : { nis_nip: ['NIS/NIP wajib diisi.'] }),
-              ...(password ? {} : { password: ['Password wajib diisi.'] }),
+              ...(identifier ? {} : { email: ['Email sekolah atau NIS/NIP wajib diisi.'] }),
+              ...(password ? {} : { password: ['Kata sandi wajib diisi.'] }),
             },
           },
           422
         );
       }
 
-      const users = await sql`SELECT * FROM users WHERE nis_nip = ${nisNip} LIMIT 1`;
+      const lowerId = identifier.toLowerCase();
+      const users = await sql`
+        SELECT * FROM users
+        WHERE LOWER(email) = ${lowerId} OR nis_nip = ${identifier}
+        LIMIT 1
+      `;
       const user = users[0];
       if (!user || !verifyPassword(password, user.password)) {
         return json(
           {
             success: false,
-            message: 'NIS/NIP atau password yang Anda masukkan salah.',
+            message: 'Email sekolah / NIS/NIP atau kata sandi yang Anda masukkan salah.',
           },
           401
         );
@@ -130,6 +141,182 @@ async function handleRequest(request, method) {
           token_type: 'Bearer',
           user: formatUserPayload(user, subject, origin),
         },
+      });
+    }
+
+    // 1b. POST /api/v1/forgot-password
+    if (method === 'POST' && path === '/forgot-password') {
+      const body = await request.json().catch(() => ({}));
+      const email = String(body.email || '').trim().toLowerCase();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json({ success: false, message: 'Masukkan alamat email sekolah yang valid.' }, 422);
+      }
+
+      const users = await sql`
+        SELECT * FROM users WHERE LOWER(email) = ${email} LIMIT 1
+      `;
+      const targetUser = users[0];
+      if (!targetUser) {
+        return json(
+          {
+            success: false,
+            message: 'Email sekolah tersebut tidak terdaftar di sistem HADIR.',
+          },
+          404
+        );
+      }
+
+      const resendKey = String(process.env.RESEND_API_KEY || '').trim();
+      const smtpHost = String(process.env.SMTP_HOST || process.env.MAIL_HOST || '').trim();
+
+      if (!resendKey && !smtpHost) {
+        return json(
+          {
+            success: false,
+            message:
+              'Layanan pengiriman email reset kata sandi belum dikonfigurasi pada server. Hubungi Admin Sekolah untuk mengatur RESEND_API_KEY atau SMTP.',
+          },
+          503
+        );
+      }
+
+      const code = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+      const codeHash = bcrypt.hashSync(code, 8);
+      await sql`
+        INSERT INTO password_reset_tokens (email, token, created_at)
+        VALUES (${email}, ${codeHash}, NOW())
+        ON CONFLICT (email) DO UPDATE SET token = EXCLUDED.token, created_at = NOW()
+      `;
+
+      const subjectLine = '[HADIR SMK Telkom] Kode Reset Kata Sandi Anda';
+      const textBody = [
+        `Halo ${targetUser.nama_lengkap},`,
+        '',
+        `Anda mengajukan permintaan reset kata sandi untuk akun HADIR (${targetUser.nis_nip}).`,
+        'Kode verifikasi 6-digit Anda adalah:',
+        '',
+        `    ${code}`,
+        '',
+        'Kode ini berlaku selama 15 menit. Jangan bagikan kode ini kepada siapa pun.',
+        '',
+        'Salam,',
+        'Tim HADIR SMK Telkom Purwokerto',
+      ].join('\n');
+
+      try {
+        if (resendKey) {
+          const fromEmail =
+            process.env.RESEND_FROM_EMAIL ||
+            process.env.MAIL_FROM_ADDRESS ||
+            'HADIR SMK Telkom <onboarding@resend.dev>';
+          const mailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${resendKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: fromEmail,
+              to: [email],
+              subject: subjectLine,
+              text: textBody,
+            }),
+          });
+          if (!mailRes.ok) {
+            throw new Error(`Resend HTTP ${mailRes.status}`);
+          }
+        } else {
+          const smtpPort = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || 587);
+          const smtpUser = process.env.SMTP_USER || process.env.MAIL_USERNAME || '';
+          const smtpPass = process.env.SMTP_PASS || process.env.MAIL_PASSWORD || '';
+          const transporter = nodemailer.createTransport({
+            host: smtpHost,
+            port: smtpPort,
+            secure: smtpPort === 465,
+            auth: smtpUser ? { user: smtpUser, pass: smtpPass } : undefined,
+          });
+          await transporter.sendMail({
+            from: process.env.MAIL_FROM_ADDRESS || smtpUser || 'no-reply@smktelkom-pwt.sch.id',
+            to: email,
+            subject: subjectLine,
+            text: textBody,
+          });
+        }
+      } catch (mailErr) {
+        console.error('Mail dispatch error:', mailErr);
+        return json(
+          {
+            success: false,
+            message: 'Gagal mengirim email verifikasi. Periksa konfigurasi email server atau coba lagi nanti.',
+          },
+          502
+        );
+      }
+
+      return json({
+        success: true,
+        message: `Kode reset kata sandi (6 digit) telah dikirim ke ${email}. Berlaku selama 15 menit.`,
+      });
+    }
+
+    // 1c. POST /api/v1/reset-password
+    if (method === 'POST' && path === '/reset-password') {
+      const body = await request.json().catch(() => ({}));
+      const email = String(body.email || '').trim().toLowerCase();
+      const code = String(body.code || '').trim();
+      const password = String(body.password || '');
+      const passwordConfirmation = String(body.password_confirmation ?? password);
+
+      if (!email || !/^\d{6}$/.test(code) || password.length < 6 || password !== passwordConfirmation) {
+        return json(
+          {
+            success: false,
+            message:
+              password !== passwordConfirmation
+                ? 'Konfirmasi kata sandi baru tidak cocok.'
+                : password.length < 6
+                ? 'Kata sandi baru minimal 6 karakter.'
+                : 'Email sekolah dan kode OTP 6 digit wajib diisi.',
+          },
+          422
+        );
+      }
+
+      const tokenRows = await sql`
+        SELECT * FROM password_reset_tokens WHERE LOWER(email) = ${email} LIMIT 1
+      `;
+      const resetRow = tokenRows[0];
+      if (!resetRow || !resetRow.created_at) {
+        return json({ success: false, message: 'Kode verifikasi tidak ditemukan atau sudah kedaluwarsa.' }, 422);
+      }
+
+      const ageMs = Date.now() - new Date(resetRow.created_at).getTime();
+      if (Number.isNaN(ageMs) || ageMs > 15 * 60 * 1000) {
+        return json(
+          { success: false, message: 'Kode verifikasi sudah kedaluwarsa (lebih dari 15 menit). Minta kode baru.' },
+          422
+        );
+      }
+
+      if (!verifyPassword(code, resetRow.token)) {
+        return json({ success: false, message: 'Kode verifikasi 6 digit tidak sesuai.' }, 422);
+      }
+
+      const users = await sql`SELECT id FROM users WHERE LOWER(email) = ${email} LIMIT 1`;
+      if (!users[0]) {
+        return json({ success: false, message: 'Akun pengguna tidak ditemukan.' }, 404);
+      }
+
+      const newHash = bcrypt.hashSync(password, 8);
+      await sql`
+        UPDATE users SET password = ${newHash}, updated_at = NOW() WHERE id = ${users[0].id}
+      `;
+      await sql`DELETE FROM password_reset_tokens WHERE LOWER(email) = ${email}`;
+
+      return json({
+        success: true,
+        message: 'Kata sandi berhasil diperbarui. Silakan masuk dengan kata sandi baru Anda.',
       });
     }
 
@@ -394,6 +581,16 @@ async function handleRequest(request, method) {
         SELECT * FROM presensis WHERE user_id = ${subject.id} AND tanggal = ${jakartaNow.dateStr} LIMIT 1
       `;
       const presensi = todayRows[0] || null;
+      const kbm = await resolveKbmEndForSubject(sql, subject, jakartaNow);
+      const sudahDatang = presensi !== null && presensi.jam_datang !== null;
+      const sudahPulang = presensi !== null && presensi.jam_pulang !== null;
+      const alasanPulangTerkunci = sudahPulang
+        ? 'Anda sudah menyelesaikan presensi datang dan pulang hari ini.'
+        : !sudahDatang
+        ? 'Scan QR Code Datang terlebih dahulu untuk membuka presensi pulang.'
+        : !kbm.kbmSudahSelesai
+        ? `QR Code Pulang aktif setelah kegiatan belajar mengajar selesai pukul ${kbm.kbmSelesai} WIB.`
+        : null;
 
       const historyRows = await sql`
         SELECT * FROM presensis WHERE user_id = ${subject.id} ORDER BY tanggal DESC LIMIT 10
@@ -412,6 +609,13 @@ async function handleRequest(request, method) {
         message: 'Data presensi hari ini berhasil diambil.',
         data: {
           sudah_presensi: presensi !== null,
+          sudah_datang: sudahDatang,
+          sudah_pulang: sudahPulang,
+          kbm_selesai: `${kbm.kbmSelesai} WIB`,
+          kbm_sudah_selesai: kbm.kbmSudahSelesai,
+          boleh_scan_datang: !sudahDatang,
+          boleh_scan_pulang: sudahDatang && !sudahPulang && kbm.kbmSudahSelesai,
+          alasan_pulang_terkunci: alasanPulangTerkunci,
           tanggal: jakartaNow.dateStr,
           jam_datang: presensi?.jam_datang ? `${presensi.jam_datang.slice(0, 5)} WIB` : null,
           jam_pulang: presensi?.jam_pulang ? `${presensi.jam_pulang.slice(0, 5)} WIB` : null,
@@ -419,6 +623,7 @@ async function handleRequest(request, method) {
           poin_perubahan: presensi?.poin_perubahan ?? 0,
           anak: {
             nis_nip: subject.nis_nip,
+            email: subject.email || defaultEmailFor(subject.nis_nip, subject.role),
             nama_lengkap: subject.nama_lengkap,
             kelas: subject.kelas,
           },
@@ -482,11 +687,15 @@ async function handleRequest(request, method) {
       }
 
       let extractedToken = rawToken;
+      let payloadType = null;
       if (rawToken.startsWith('{') && rawToken.endsWith('}')) {
         try {
           const parsed = JSON.parse(rawToken);
           if (parsed && typeof parsed.token === 'string') {
             extractedToken = parsed.token.trim();
+            if (typeof parsed.type === 'string') {
+              payloadType = parsed.type.trim().toLowerCase();
+            }
           }
         } catch {
           // keep raw token
@@ -494,12 +703,14 @@ async function handleRequest(request, method) {
       }
 
       const jakartaNow = getJakartaNow();
-      const tokenRows = await sql`
-        SELECT * FROM daily_qr_tokens WHERE tanggal = ${jakartaNow.dateStr} LIMIT 1
-      `;
-      const dailyToken = tokenRows[0];
+      const dailyToken = await ensureTodayQrToken(sql, jakartaNow.dateStr);
+      const tokenDatang = String(dailyToken?.token_datang || dailyToken?.token || '');
+      const tokenPulang = String(dailyToken?.token_pulang || '');
 
-      if (!dailyToken || !extractedToken || dailyToken.token !== extractedToken) {
+      const matchesDatang = Boolean(extractedToken && tokenDatang && extractedToken === tokenDatang);
+      const matchesPulang = Boolean(extractedToken && tokenPulang && extractedToken === tokenPulang);
+
+      if (!dailyToken || (!matchesDatang && !matchesPulang)) {
         return json(
           {
             success: false,
@@ -509,12 +720,41 @@ async function handleRequest(request, method) {
         );
       }
 
+      if (payloadType && ((matchesDatang && payloadType !== 'datang') || (matchesPulang && payloadType !== 'pulang'))) {
+        return json(
+          {
+            success: false,
+            message: 'Payload QR Code tidak sesuai jenis QR Datang/Pulang.',
+          },
+          400
+        );
+      }
+
+      const kbm = await resolveKbmEndForSubject(sql, subject, jakartaNow);
+
       const existingRows = await sql`
         SELECT * FROM presensis WHERE user_id = ${user.id} AND tanggal = ${jakartaNow.dateStr} LIMIT 1
       `;
       const presensi = existingRows[0];
 
-      if (!presensi) {
+      if (matchesDatang) {
+        if (presensi) {
+          return json(
+            {
+              success: false,
+              message:
+                'Anda sudah melakukan presensi Datang hari ini. Gunakan QR Code Pulang setelah kegiatan belajar mengajar selesai.',
+              data: {
+                tipe_scan: 'datang',
+                jam_datang: presensi.jam_datang ? `${String(presensi.jam_datang).slice(0, 5)} WIB` : null,
+                jam_pulang: presensi.jam_pulang ? `${String(presensi.jam_pulang).slice(0, 5)} WIB` : null,
+                status: presensi.status,
+              },
+            },
+            422
+          );
+        }
+
         const deadlineFull =
           ATTENDANCE_CONFIG.checkInDeadline.length === 5
             ? `${ATTENDANCE_CONFIG.checkInDeadline}:00`
@@ -555,11 +795,25 @@ async function handleRequest(request, method) {
             bintang: newBintang,
             jarak_meter: roundedDistance,
             lokasi_sekolah: SCHOOL_CONFIG.name,
+            kbm_selesai: `${kbm.kbmSelesai} WIB`,
+            kbm_sudah_selesai: kbm.kbmSudahSelesai,
             pesan: isTepatWaktu
-              ? 'Pertahankan kedisiplinan Anda untuk meraih rating bintang 5.0!'
+              ? `QR Code Pulang akan aktif setelah KBM selesai pukul ${kbm.kbmSelesai} WIB.`
               : 'Usahakan datang sebelum pukul 07:00 WIB di hari berikutnya untuk menjaga rapor PKL tetap prima.',
           },
         });
+      }
+
+      // QR Code Pulang flow
+      if (!presensi || !presensi.jam_datang) {
+        return json(
+          {
+            success: false,
+            message: 'Presensi Pulang ditolak! Anda wajib melakukan scan QR Code Datang terlebih dahulu hari ini.',
+            data: { tipe_scan: 'pulang', syarat_terpenuhi: false },
+          },
+          422
+        );
       }
 
       if (presensi.jam_pulang !== null) {
@@ -577,8 +831,24 @@ async function handleRequest(request, method) {
         );
       }
 
+      if (!kbm.kbmSudahSelesai) {
+        return json(
+          {
+            success: false,
+            message: `QR Code Pulang belum dibuka! Selesaikan kegiatan belajar mengajar hari ini terlebih dahulu (berakhir pukul ${kbm.kbmSelesai} WIB).`,
+            data: {
+              tipe_scan: 'pulang',
+              kbm_selesai: `${kbm.kbmSelesai} WIB`,
+              waktu_sekarang: `${jakartaNow.hhmm} WIB`,
+              kbm_sudah_selesai: false,
+            },
+          },
+          422
+        );
+      }
+
       await sql`
-        UPDATE presensis SET jam_pulang = ${jakartaNow.hhmmss} WHERE id = ${presensi.id}
+        UPDATE presensis SET jam_pulang = ${jakartaNow.hhmmss}, updated_at = NOW() WHERE id = ${presensi.id}
       `;
 
       return json({
@@ -595,6 +865,8 @@ async function handleRequest(request, method) {
           bintang: Number(user.bintang ?? 5.0),
           jarak_meter: roundedDistance,
           lokasi_sekolah: SCHOOL_CONFIG.name,
+          kbm_selesai: `${kbm.kbmSelesai} WIB`,
+          kbm_sudah_selesai: true,
         },
       });
     }
@@ -705,29 +977,42 @@ async function handleRequest(request, method) {
         return json({ success: false, message: 'Hanya Guru/Admin yang dapat mengakses token QR.' }, 403);
       }
       const jakartaNow = getJakartaNow();
-      if (method === 'POST') {
-        const newToken = `HADIR-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
-        await sql`
-          INSERT INTO daily_qr_tokens (tanggal, token, jam_mulai, jam_selesai)
-          VALUES (${jakartaNow.dateStr}, ${newToken}, '06:00:00', '17:00:00')
-          ON CONFLICT (tanggal) DO UPDATE SET token = EXCLUDED.token
-        `;
-      }
-      const rows = await sql`
-        SELECT * FROM daily_qr_tokens WHERE tanggal = ${jakartaNow.dateStr} LIMIT 1
-      `;
-      const record = rows[0];
+      const record =
+        method === 'POST'
+          ? await regenerateTodayQrToken(sql, jakartaNow.dateStr)
+          : await ensureTodayQrToken(sql, jakartaNow.dateStr);
+      const tokenDatang = record?.token_datang || record?.token || null;
+      const tokenPulang = record?.token_pulang || null;
+      const kbm = await resolveKbmEndForSubject(sql, subject, jakartaNow);
+
       return json({
         success: true,
         data: {
           tanggal: jakartaNow.dateStr,
           tanggal_label: formatIndoDate(jakartaNow.dateStr),
-          token: record?.token || null,
+          token: tokenDatang,
+          token_datang: tokenDatang,
+          token_pulang: tokenPulang,
           payload: JSON.stringify({
             app: 'HADIR-PSAS',
-            token: record?.token,
+            type: 'datang',
+            token: tokenDatang,
             tanggal: jakartaNow.dateStr,
           }),
+          payload_datang: JSON.stringify({
+            app: 'HADIR-PSAS',
+            type: 'datang',
+            token: tokenDatang,
+            tanggal: jakartaNow.dateStr,
+          }),
+          payload_pulang: JSON.stringify({
+            app: 'HADIR-PSAS',
+            type: 'pulang',
+            token: tokenPulang,
+            tanggal: jakartaNow.dateStr,
+          }),
+          kbm_selesai: `${kbm.kbmSelesai} WIB`,
+          kbm_sudah_selesai: kbm.kbmSudahSelesai,
           jam_mulai: record?.jam_mulai?.slice(0, 5) || '06:00',
           jam_selesai: record?.jam_selesai?.slice(0, 5) || '17:00',
         },

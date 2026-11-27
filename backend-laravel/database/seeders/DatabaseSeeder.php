@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         User::updateOrCreate(
             ['nis_nip' => 'admin'],
             [
+                'email' => User::defaultEmailFor('admin', 'admin'),
                 'nama_lengkap' => 'Administrator HADIR',
                 'kelas' => null,
                 'role' => 'admin',
@@ -54,6 +55,7 @@ class DatabaseSeeder extends Seeder
             User::updateOrCreate(
                 ['nis_nip' => $g['nis_nip']],
                 [
+                    'email' => User::defaultEmailFor($g['nis_nip'], 'guru'),
                     'nama_lengkap' => $g['nama_lengkap'],
                     'kelas' => null,
                     'role' => 'guru',
@@ -108,6 +110,7 @@ class DatabaseSeeder extends Seeder
             $student = User::updateOrCreate(
                 ['nis_nip' => $s['nis_nip']],
                 [
+                    'email' => User::defaultEmailFor($s['nis_nip'], 'siswa'),
                     'nama_lengkap' => $s['nama_lengkap'],
                     'kelas' => 'XI PPLG 4',
                     'role' => 'siswa',
@@ -123,6 +126,7 @@ class DatabaseSeeder extends Seeder
             User::updateOrCreate(
                 ['nis_nip' => $doubleNis],
                 [
+                    'email' => User::defaultEmailFor($doubleNis, 'orang_tua'),
                     'nama_lengkap' => 'Orang Tua ' . $student->nama_lengkap,
                     'kelas' => $student->kelas,
                     'child_user_id' => $student->id,
@@ -227,14 +231,7 @@ class DatabaseSeeder extends Seeder
         // 5. Daily QR Token resmi buatan Admin untuk hari ini (WIB) - hapus token demo lama
         $today = Carbon::now('Asia/Jakarta');
         DailyQrToken::where('token', 'PSAS-QR-DEMO-TODAY')->delete();
-        DailyQrToken::firstOrCreate(
-            ['tanggal' => $today->toDateString()],
-            [
-                'token' => 'HADIR-' . strtoupper(Str::random(10)),
-                'jam_mulai' => '06:00:00',
-                'jam_selesai' => '17:00:00',
-            ]
-        );
+        DailyQrToken::getOrCreateForToday();
 
         // 6. Contoh Presensi riwayat hari sebelumnya
         $yesterday = $today->copy()->subDays(1)->toDateString();

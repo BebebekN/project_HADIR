@@ -2,11 +2,13 @@ package com.psas.hadir.data.api
 
 import com.psas.hadir.data.model.ApiResponse
 import com.psas.hadir.data.model.DashboardData
+import com.psas.hadir.data.model.ForgotPasswordRequest
 import com.psas.hadir.data.model.JadwalResponseData
 import com.psas.hadir.data.model.LoginData
 import com.psas.hadir.data.model.LoginRequest
 import com.psas.hadir.data.model.MonitoringData
 import com.psas.hadir.data.model.PresensiHariIniDto
+import com.psas.hadir.data.model.ResetPasswordRequest
 import com.psas.hadir.data.model.ScanRequest
 import com.psas.hadir.data.model.ScanResultData
 import com.psas.hadir.data.model.UserDto
@@ -24,6 +26,12 @@ interface ApiService {
 
     @POST("login")
     suspend fun login(@Body request: LoginRequest): Response<ApiResponse<LoginData>>
+
+    @POST("forgot-password")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequest): Response<ApiResponse<Any>>
+
+    @POST("reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<ApiResponse<Any>>
 
     @POST("logout")
     suspend fun logout(): Response<ApiResponse<Any>>

@@ -40,6 +40,12 @@ class SiswaResource extends Resource
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(50),
+                Forms\Components\TextInput::make('email')
+                    ->label('Email Sekolah')
+                    ->email()
+                    ->unique(ignoreRecord: true)
+                    ->helperText('Kosongkan untuk otomatis menjadi <NIS>@student.smktelkom-pwt.sch.id')
+                    ->maxLength(191),
                 Forms\Components\TextInput::make('nama_lengkap')
                     ->label('Nama Lengkap')
                     ->required()
@@ -84,6 +90,11 @@ class SiswaResource extends Resource
                     ->label('NIS')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('email')
+                    ->label('Email Sekolah')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable(),
                 Tables\Columns\TextColumn::make('nama_lengkap')
                     ->label('Nama Lengkap')
                     ->searchable()

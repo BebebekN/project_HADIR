@@ -181,19 +181,25 @@
                         android:layout_height="match_parent" />
 
                     <FrameLayout
+                        android:id="@+id/scannerViewfinder"
                         android:layout_width="200dp"
                         android:layout_height="200dp"
                         android:layout_gravity="center"
-                        android:background="@drawable/bg_scanner_frame">
+                        android:background="@drawable/bg_scanner_frame"
+                        android:clipChildren="true"
+                        android:clipToPadding="true">
 
                         <View
-                            android:layout_width="170dp"
+                            android:id="@+id/laserLine"
+                            android:layout_width="172dp"
                             android:layout_height="3dp"
-                            android:layout_gravity="center"
+                            android:layout_gravity="top|center_horizontal"
+                            android:layout_marginTop="14dp"
                             android:background="#00C2B3" />
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tvScannerHint"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_gravity="bottom|center_horizontal"
@@ -201,7 +207,7 @@
                         android:background="#B3111827"
                         android:paddingHorizontal="14dp"
                         android:paddingVertical="6dp"
-                        android:text="Arahkan kamera ke QR resmi Admin"
+                        android:text="Arahkan kamera ke QR Datang / QR Pulang Admin"
                         android:textColor="@color/white"
                         android:textSize="12sp"
                         android:textStyle="bold" />

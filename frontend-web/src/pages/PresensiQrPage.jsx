@@ -11,7 +11,10 @@ import {
   KeyRound,
   MapPin,
   RefreshCw,
+  Lock,
+  Unlock,
 } from 'lucide-react';
+import jsQR from 'jsqr';
 import confetti from 'canvas-confetti';
 import { presensiApi } from '../services/api';
 
@@ -48,8 +51,11 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
   const [gpsError, setGpsError] = useState('');
 
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const rafRef = useRef(null);
   const detectorIntervalRef = useRef(null);
+  const handledScanRef = useRef(false);
 
   const geofence = todayData?.school_geofence || DEFAULT_GEOFENCE;
   const distanceMeters = coords
@@ -99,6 +105,10 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
   }, []);
 
   const stopCamera = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     if (detectorIntervalRef.current) {
       clearInterval(detectorIntervalRef.current);
       detectorIntervalRef.current = null;
@@ -106,6 +116,9 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraActive(false);
   }, []);
@@ -158,102 +171,184 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
     };
   }, [stopCamera]);
 
-  const submitScan = async (tokenValue) => {
-    const cleanToken = (tokenValue || qrToken).trim();
-    if (!cleanToken) {
-      setErrorMsg('Silakan pindai QR Code atau masukkan kode resmi buatan Admin.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setErrorMsg('');
-      setFeedback(null);
-
-      // Always get fresh coordinates if missing
-      const activeCoords = coords || (await requestGpsLocation());
-      const dist = Math.round(
-        haversineDistanceMeters(
-          activeCoords.latitude,
-          activeCoords.longitude,
-          Number(geofence.latitude),
-          Number(geofence.longitude)
-        )
-      );
-
-      if (dist > Number(geofence.radius_meters)) {
-        setErrorMsg(
-          `Presensi ditolak! Anda berada di luar kawasan ${geofence.name} (jarak ~${dist} m, batas maksimal ${geofence.radius_meters} m).`
-        );
+  const submitScan = useCallback(
+    async (tokenValue) => {
+      const cleanToken = (tokenValue || qrToken).trim();
+      if (!cleanToken) {
+        setErrorMsg('Silakan pindai QR Code atau masukkan kode resmi buatan Admin.');
         return;
       }
 
-      const res = await presensiApi.scan(
-        cleanToken,
-        activeCoords.latitude,
-        activeCoords.longitude
-      );
-      if (res.success) {
-        stopCamera();
-        setFeedback(res);
-        if (res.data?.status === 'Tepat Waktu') {
-          confetti({
-            particleCount: 90,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#0055ff', '#00C2B3', '#10b981'],
-          });
+      try {
+        setLoading(true);
+        setErrorMsg('');
+        setFeedback(null);
+
+        // Always get fresh coordinates if missing
+        const activeCoords = coords || (await requestGpsLocation());
+        const dist = Math.round(
+          haversineDistanceMeters(
+            activeCoords.latitude,
+            activeCoords.longitude,
+            Number(geofence.latitude),
+            Number(geofence.longitude)
+          )
+        );
+
+        if (dist > Number(geofence.radius_meters)) {
+          setErrorMsg(
+            `Presensi ditolak! Anda berada di luar kawasan ${geofence.name} (jarak ~${dist} m, batas maksimal ${geofence.radius_meters} m).`
+          );
+          return;
         }
-        refreshToday();
-        if (onScanSuccess) onScanSuccess(res.data);
-      } else {
-        setErrorMsg(res.message || 'Gagal mencatat presensi.');
+
+        const res = await presensiApi.scan(
+          cleanToken,
+          activeCoords.latitude,
+          activeCoords.longitude
+        );
+        if (res.success) {
+          stopCamera();
+          setFeedback(res);
+          if (res.data?.status === 'Tepat Waktu') {
+            confetti({
+              particleCount: 90,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#0055ff', '#00C2B3', '#10b981'],
+            });
+          }
+          refreshToday();
+          if (onScanSuccess) onScanSuccess(res.data);
+        } else {
+          setErrorMsg(res.message || 'Gagal mencatat presensi.');
+        }
+      } catch (err) {
+        setErrorMsg(
+          err.response?.data?.message ||
+            err.message ||
+            'Kode QR tidak valid atau lokasi Anda di luar kawasan sekolah.'
+        );
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setErrorMsg(
-        err.response?.data?.message ||
-          err.message ||
-          'Kode QR tidak valid atau lokasi Anda di luar kawasan sekolah.'
-      );
-    } finally {
-      setLoading(false);
+    },
+    [coords, geofence.latitude, geofence.longitude, geofence.name, geofence.radius_meters, onScanSuccess, qrToken, refreshToday, requestGpsLocation, stopCamera]
+  );
+
+  // Bind camera stream & run cross-browser QR decoder (jsQR for iOS/Safari/Firefox + BarcodeDetector boost)
+  useEffect(() => {
+    if (!cameraActive || !streamRef.current) return undefined;
+
+    const video = videoRef.current;
+    if (!video) return undefined;
+
+    let cancelled = false;
+    handledScanRef.current = false;
+
+    video.srcObject = streamRef.current;
+    video.setAttribute('playsinline', 'true');
+    video.muted = true;
+    video.play().catch(() => {});
+
+    const onLoadedMeta = () => {
+      video.play().catch(() => {});
+    };
+    video.addEventListener('loadedmetadata', onLoadedMeta);
+
+    const canvas = canvasRef.current || document.createElement('canvas');
+    canvasRef.current = canvas;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    let lastScanTs = 0;
+    const handleDetected = (rawVal) => {
+      const val = String(rawVal || '').trim();
+      if (!val || handledScanRef.current || cancelled) return;
+      handledScanRef.current = true;
+      setQrToken(val);
+      stopCamera();
+      submitScan(val);
+    };
+
+    const scanFrame = (ts) => {
+      if (cancelled || handledScanRef.current) return;
+      if (ts - lastScanTs >= 130 && video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0 && ctx) {
+        lastScanTs = ts;
+        try {
+          const maxDim = 640;
+          const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
+          const w = Math.max(160, Math.round(video.videoWidth * scale));
+          const h = Math.max(160, Math.round(video.videoHeight * scale));
+          if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+          }
+          ctx.drawImage(video, 0, 0, w, h);
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const decoded = jsQR(imageData.data, w, h, { inversionAttempts: 'attemptBoth' });
+          if (decoded?.data) {
+            handleDetected(decoded.data);
+            return;
+          }
+        } catch {
+          // Wait for next video frame
+        }
+      }
+      rafRef.current = requestAnimationFrame(scanFrame);
+    };
+    rafRef.current = requestAnimationFrame(scanFrame);
+
+    if ('BarcodeDetector' in window) {
+      try {
+        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+        detectorIntervalRef.current = setInterval(async () => {
+          if (cancelled || handledScanRef.current || !video || video.readyState < 2) return;
+          try {
+            const barcodes = await detector.detect(video);
+            if (barcodes.length > 0 && barcodes[0].rawValue) {
+              handleDetected(barcodes[0].rawValue);
+            }
+          } catch {
+            // Fallback jsQR loop handles decoding
+          }
+        }, 350);
+      } catch {
+        // Ignore unsupported format init
+      }
     }
-  };
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('loadedmetadata', onLoadedMeta);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      if (detectorIntervalRef.current) {
+        clearInterval(detectorIntervalRef.current);
+        detectorIntervalRef.current = null;
+      }
+    };
+  }, [cameraActive, stopCamera, submitScan]);
 
   const startCamera = async () => {
     setErrorMsg('');
     if (!navigator.mediaDevices?.getUserMedia) {
-      setErrorMsg('Kamera browser tidak tersedia. Pindai dari HP Android atau ketik kode QR dari Admin.');
+      setErrorMsg('Kamera browser tidak tersedia. Pindai dari HP Android/iPhone HTTPS atau ketik kode QR dari Admin.');
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
       });
       streamRef.current = stream;
       setCameraActive(true);
-      setTimeout(() => {
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      }, 100);
-
-      if ('BarcodeDetector' in window) {
-        const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-        detectorIntervalRef.current = setInterval(async () => {
-          if (!videoRef.current || videoRef.current.readyState !== 4) return;
-          try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes.length > 0 && barcodes[0].rawValue) {
-              const detected = barcodes[0].rawValue;
-              setQrToken(detected);
-              stopCamera();
-              submitScan(detected);
-            }
-          } catch {
-            // ignore
-          }
-        }, 500);
-      }
     } catch {
       setErrorMsg('Izin kamera ditolak atau tidak tersedia pada browser ini.');
       setCameraActive(false);
@@ -293,33 +388,33 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
                 className="w-full h-full object-cover"
               />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-52 h-52 border-2 border-white rounded-[20px] relative">
-                  <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-[#00C2B3]" />
+                <div className="w-56 h-56 border-2 border-white/95 rounded-[22px] relative overflow-hidden shadow-[0_0_0_9999px_rgba(0,0,0,0.28)]">
+                  <div className="absolute left-3 right-3 h-[2.5px] rounded-full bg-[#00C2B3] animate-qr-sweep" />
                 </div>
               </div>
               <button
                 type="button"
                 onClick={stopCamera}
-                className="absolute bottom-3 right-3 px-4 py-1.5 rounded-full bg-black/70 text-white text-xs font-semibold"
+                className="absolute bottom-3 right-3 px-4 py-1.5 rounded-full bg-black/70 text-white text-xs font-semibold cursor-pointer"
               >
                 Matikan Kamera
               </button>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-5">
-              <div className="w-56 h-56 rounded-[24px] border-2 border-white/85 flex items-center justify-center relative">
-                <div className="absolute left-0 right-0 top-1/2 h-[2px] bg-[#00C2B3]" />
+              <div className="w-56 h-56 rounded-[24px] border-2 border-white/85 flex items-center justify-center relative overflow-hidden">
+                <div className="absolute left-3 right-3 h-[2.5px] rounded-full bg-[#00C2B3] animate-qr-sweep" />
                 <button
                   type="button"
                   onClick={startCamera}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-xs transition-all"
+                  className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-semibold backdrop-blur-xs transition-all cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
                   Aktifkan Kamera
                 </button>
               </div>
-              <p className="text-[13px] text-white/85 font-medium">
-                Pindai QR resmi buatan Admin untuk {scanMode}
+              <p className="text-[13px] text-white/85 font-medium text-center">
+                Pindai QR Datang / QR Pulang resmi buatan Admin untuk {scanMode}
               </p>
             </div>
           )}
@@ -468,7 +563,7 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
         </div>
 
         {/* Datang Card */}
-        <div className="bg-white rounded-[24px] p-6 border border-[#e3e1ec]/60 shadow-xs flex items-center justify-between">
+        <div className="bg-white rounded-[24px] p-6 border border-[#e3e1ec]/60 shadow-xs flex items-center justify-between gap-3">
           <div className="space-y-2">
             <div
               className={`flex items-center gap-2 text-[15px] font-semibold ${
@@ -479,7 +574,7 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
               <span>
                 {todayData?.jam_datang
                   ? 'Sudah Presensi Datang'
-                  : 'Belum Presensi Datang'}
+                  : '1. Siap Scan QR Code Datang'}
               </span>
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f8f8fd] text-[13px] font-mono font-semibold text-[#1b1b23]">
@@ -488,37 +583,62 @@ export default function PresensiQrPage({ onScanSuccess, onOpenRapot }) {
             </div>
           </div>
           <LogIn
-            className={`w-6 h-6 ${
+            className={`w-6 h-6 shrink-0 ${
               todayData?.jam_datang ? 'text-[#135e3d]' : 'text-[#9a3412]'
             }`}
           />
         </div>
 
-        {/* Pulang Card */}
-        <div className="bg-white rounded-[24px] p-6 border border-[#e3e1ec]/60 shadow-xs flex items-center justify-between">
-          <div className="space-y-2">
-            <div
-              className={`flex items-center gap-2 text-[15px] font-semibold ${
-                todayData?.jam_pulang ? 'text-[#135e3d]' : 'text-[#b91c1c]'
+        {/* Pulang Card (terkunci sampai Datang & KBM selesai) */}
+        <div className="bg-white rounded-[24px] p-6 border border-[#e3e1ec]/60 shadow-xs space-y-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-2">
+              <div
+                className={`flex items-center gap-2 text-[15px] font-semibold ${
+                  todayData?.jam_pulang
+                    ? 'text-[#135e3d]'
+                    : todayData?.boleh_scan_pulang
+                    ? 'text-[#0055ff]'
+                    : 'text-[#b91c1c]'
+                }`}
+              >
+                {todayData?.jam_pulang ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : todayData?.boleh_scan_pulang ? (
+                  <Unlock className="w-5 h-5" />
+                ) : (
+                  <Lock className="w-5 h-5" />
+                )}
+                <span>
+                  {todayData?.jam_pulang
+                    ? 'Sudah Presensi Pulang'
+                    : todayData?.boleh_scan_pulang
+                    ? '2. QR Code Pulang Terbuka'
+                    : '2. QR Code Pulang Terkunci'}
+                </span>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f8f8fd] text-[13px] font-mono font-semibold text-[#5d6367]">
+                <Clock className="w-4 h-4" />
+                <span>{todayData?.jam_pulang || '--:--'}</span>
+              </div>
+            </div>
+            <LogOutIcon
+              className={`w-6 h-6 shrink-0 ${
+                todayData?.jam_pulang
+                  ? 'text-[#135e3d]'
+                  : todayData?.boleh_scan_pulang
+                  ? 'text-[#0055ff]'
+                  : 'text-[#b91c1c]'
               }`}
-            >
-              <Clock className="w-5 h-5" />
-              <span>
-                {todayData?.jam_pulang
-                  ? 'Sudah Presensi Pulang'
-                  : 'Belum Presensi Pulang'}
-              </span>
-            </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f8f8fd] text-[13px] font-mono font-semibold text-[#5d6367]">
-              <Clock className="w-4 h-4" />
-              <span>{todayData?.jam_pulang || '--:--'}</span>
-            </div>
+            />
           </div>
-          <LogOutIcon
-            className={`w-6 h-6 ${
-              todayData?.jam_pulang ? 'text-[#135e3d]' : 'text-[#b91c1c]'
-            }`}
-          />
+
+          {!todayData?.jam_pulang && (todayData?.alasan_pulang_terkunci || todayData?.kbm_selesai) && (
+            <div className="text-[11px] leading-relaxed px-3 py-2 rounded-2xl bg-[#f8f8fd] border border-[#e3e1ec] text-[#5d6367]">
+              {todayData?.alasan_pulang_terkunci ||
+                `QR Code Pulang aktif setelah KBM berakhir pukul ${todayData?.kbm_selesai}.`}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -40,6 +40,12 @@ class GuruResource extends Resource
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(50),
+                Forms\Components\TextInput::make('email')
+                    ->label('Email Sekolah')
+                    ->email()
+                    ->unique(ignoreRecord: true)
+                    ->helperText('Kosongkan untuk otomatis menjadi <NIP>@smktelkom-pwt.sch.id')
+                    ->maxLength(191),
                 Forms\Components\TextInput::make('nama_lengkap')
                     ->label('Nama Lengkap & Gelar')
                     ->required()
@@ -63,6 +69,11 @@ class GuruResource extends Resource
                     ->label('NIP / ID Guru')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('email')
+                    ->label('Email Sekolah')
+                    ->searchable()
+                    ->sortable()
+                    ->copyable(),
                 Tables\Columns\TextColumn::make('nama_lengkap')
                     ->label('Nama Lengkap')
                     ->searchable()

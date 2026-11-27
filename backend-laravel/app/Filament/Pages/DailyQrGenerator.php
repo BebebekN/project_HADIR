@@ -3,12 +3,12 @@
 namespace App\Filament\Pages;
 
 use App\Models\DailyQrToken;
+use App\Models\Jadwal;
 use Carbon\Carbon;
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Illuminate\Support\Str;
 
 class DailyQrGenerator extends Page
 {
@@ -23,10 +23,15 @@ class DailyQrGenerator extends Page
     protected static string $view = 'filament.pages.daily-qr-generator';
 
     public ?string $qrToken = null;
+    public ?string $tokenDatang = null;
+    public ?string $tokenPulang = null;
     public ?string $qrSvg = null;
+    public ?string $qrSvgDatang = null;
+    public ?string $qrSvgPulang = null;
     public ?string $tanggal = null;
     public ?string $jamMulai = null;
     public ?string $jamSelesai = null;
+    public ?string $kbmSelesai = null;
 
     public function mount(): void
     {
@@ -35,19 +40,46 @@ class DailyQrGenerator extends Page
 
     public function loadQrData(): void
     {
-        $today = Carbon::now('Asia/Jakarta')->toDateString();
+        $now = Carbon::now('Asia/Jakarta');
+        $today = $now->toDateString();
         $record = DailyQrToken::getOrCreateForToday();
 
-        $this->qrToken = $record->token;
+        $this->tokenDatang = $record->token_datang ?: $record->token;
+        $this->tokenPulang = $record->token_pulang;
+        $this->qrToken = $this->tokenDatang;
         $this->tanggal = Carbon::parse($record->tanggal)->isoFormat('dddd, D MMMM Y');
         $this->jamMulai = substr($record->jam_mulai, 0, 5);
         $this->jamSelesai = substr($record->jam_selesai, 0, 5);
 
-        // Generate SVG QR Code using chillerlan/php-qrcode
+        $dayMap = [
+            'Monday' => 'Senin',
+            'Tuesday' => 'Selasa',
+            'Wednesday' => 'Rabu',
+            'Thursday' => 'Kamis',
+            'Friday' => 'Jumat',
+            'Saturday' => 'Sabtu',
+            'Sunday' => 'Minggu',
+        ];
+        $hariIni = $dayMap[$now->format('l')] ?? 'Senin';
+        $maxJamSelesai = Jadwal::where('hari', $hariIni)->max('jam_selesai');
+        $defaultEnd = (string) config('hadir.attendance.default_kbm_end', '15:30');
+        $this->kbmSelesai = $maxJamSelesai ? substr((string) $maxJamSelesai, 0, 5) : substr($defaultEnd, 0, 5);
+
+        $this->qrSvgDatang = $this->buildQrSvg('datang', (string) $this->tokenDatang, $today);
+        $this->qrSvgPulang = $this->buildQrSvg('pulang', (string) $this->tokenPulang, $today);
+        $this->qrSvg = $this->qrSvgDatang;
+    }
+
+    private function buildQrSvg(string $type, string $token, string $tanggal): ?string
+    {
+        if ($token === '') {
+            return null;
+        }
+
         try {
             $options = new QROptions([
                 'outputType' => QRCode::OUTPUT_MARKUP_SVG,
-                'version' => 5,
+                'version' => QRCode::VERSION_AUTO,
                 'eccLevel' => QRCode::ECC_M,
                 'addQuietzone' => true,
                 'svgUseFill' => true,
@@ -55,37 +87,24 @@ class DailyQrGenerator extends Page
 
             $payload = json_encode([
                 'app' => 'HADIR-PSAS',
-                'token' => $record->token,
-                'tanggal' => $record->tanggal,
-            ]);
+                'type' => $type,
+                'token' => $token,
+                'tanggal' => $tanggal,
+            ], JSON_UNESCAPED_SLASHES);
 
-            $this->qrSvg = (new QRCode($options))->render($payload);
+            return (new QRCode($options))->render($payload);
         } catch (\Throwable $e) {
-            $this->qrSvg = null;
+            return null;
         }
     }
 
     public function regenerateToken(): void
     {
-        $today = Carbon::now('Asia/Jakarta')->toDateString();
-        $record = DailyQrToken::where('tanggal', $today)->first();
-
-        $newToken = 'HADIR-' . strtoupper(Str::random(10));
-        if ($record) {
-            $record->update(['token' => $newToken]);
-        } else {
-            DailyQrToken::create([
-                'tanggal' => $today,
-                'token' => $newToken,
-                'jam_mulai' => '06:00:00',
-                'jam_selesai' => '17:00:00',
-            ]);
-        }
-
+        DailyQrToken::regenerateForToday();
         $this->loadQrData();
 
         Notification::make()
-            ->title('Token QR Baru Berhasil Dibuat!')
+            ->title('Pasangan QR Datang & Pulang Baru Berhasil Dibuat!')
             ->success()
             ->send();
     }

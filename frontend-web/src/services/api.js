@@ -65,7 +65,11 @@ apiClient.interceptors.response.use(
 );
 
 export const authApi = {
-  login: (nis_nip, password) => apiClient.post('/login', { nis_nip, password }),
+  login: (identifier, password) =>
+    apiClient.post('/login', { email: identifier, nis_nip: identifier, password }),
+  forgotPassword: (email) => apiClient.post('/forgot-password', { email }),
+  resetPassword: ({ email, code, password, password_confirmation }) =>
+    apiClient.post('/reset-password', { email, code, password, password_confirmation }),
   logout: () => apiClient.post('/logout'),
   me: () => apiClient.get('/user'),
   updatePhoto: (file) => {

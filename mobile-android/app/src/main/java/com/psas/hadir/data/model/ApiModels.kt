@@ -9,8 +9,20 @@ data class ApiResponse<T>(
 )
 
 data class LoginRequest(
+    @SerializedName("email") val email: String,
     @SerializedName("nis_nip") val nisNip: String,
     val password: String
+)
+
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class ResetPasswordRequest(
+    val email: String,
+    val code: String,
+    val password: String,
+    @SerializedName("password_confirmation") val passwordConfirmation: String
 )
 
 data class LoginData(
@@ -22,6 +34,7 @@ data class LoginData(
 data class UserDto(
     val id: Long,
     @SerializedName("nis_nip") val nisNip: String,
+    val email: String? = null,
     @SerializedName("nama_lengkap") val namaLengkap: String,
     val kelas: String?,
     val role: String,
@@ -56,6 +69,13 @@ data class NotifikasiPresensiDto(
 
 data class PresensiHariIniDto(
     @SerializedName("sudah_presensi") val sudahPresensi: Boolean,
+    @SerializedName("sudah_datang") val sudahDatang: Boolean = false,
+    @SerializedName("sudah_pulang") val sudahPulang: Boolean = false,
+    @SerializedName("kbm_selesai") val kbmSelesai: String? = null,
+    @SerializedName("kbm_sudah_selesai") val kbmSudahSelesai: Boolean = false,
+    @SerializedName("boleh_scan_datang") val bolehScanDatang: Boolean = true,
+    @SerializedName("boleh_scan_pulang") val bolehScanPulang: Boolean = false,
+    @SerializedName("alasan_pulang_terkunci") val alasanPulangTerkunci: String? = null,
     val tanggal: String?,
     @SerializedName("jam_datang") val jamDatang: String?,
     @SerializedName("jam_pulang") val jamPulang: String?,

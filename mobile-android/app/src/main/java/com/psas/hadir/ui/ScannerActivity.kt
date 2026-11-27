@@ -1,6 +1,8 @@
 package com.psas.hadir.ui
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
@@ -11,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,6 +56,7 @@ class ScannerActivity : AppCompatActivity() {
     private var camera: Camera? = null
     private var isFlashOn = false
     private var isProcessing = false
+    private var laserAnimator: ObjectAnimator? = null
 
     private var schoolName = "SMK Telkom Purwokerto"
     private var schoolLat = -7.435210
@@ -126,6 +130,7 @@ class ScannerActivity : AppCompatActivity() {
         }
 
         setupModePills()
+        startLaserAnimation()
 
         binding.btnRefreshGps.setOnClickListener {
             if (!hasLocationPermission()) {
@@ -163,11 +168,23 @@ class ScannerActivity : AppCompatActivity() {
         modes.forEach { tv -> tv.setOnClickListener { selectMode(tv) } }
     }
 
+    private fun startLaserAnimation() {
+        val distancePx = 166f * resources.displayMetrics.density
+        laserAnimator = ObjectAnimator.ofFloat(binding.laserLine, "translationY", 0f, distancePx).apply {
+            duration = 1400L
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            interpolator = AccelerateDecelerateInterpolator()
+            start()
+        }
+    }
+
     private fun syncSchoolGeofenceConfig() {
         lifecycleScope.launch {
             try {
                 val res = RetrofitClient.getService(this@ScannerActivity).getTodayPresensi()
-                val geo = res.body()?.data?.schoolGeofence
+                val body = res.body()?.data
+                val geo = body?.schoolGeofence
                 if (res.isSuccessful && geo != null) {
                     schoolName = geo.name
                     schoolLat = geo.latitude
@@ -175,6 +192,15 @@ class ScannerActivity : AppCompatActivity() {
                     schoolRadiusMeters = geo.radiusMeters
                     binding.tvGpsTitle.text = "Kawasan $schoolName"
                     updateGpsBanner()
+                }
+                if (res.isSuccessful && body != null) {
+                    binding.tvScannerHint.text = when {
+                        body.sudahPulang -> "Presensi Datang & Pulang hari ini sudah selesai"
+                        !body.sudahDatang -> "1. Scan QR Code Datang resmi Admin"
+                        body.bolehScanPulang -> "2. QR Code Pulang sudah terbuka — Silakan scan"
+                        else -> body.alasanPulangTerkunci
+                            ?: "2. QR Pulang aktif setelah KBM selesai (${body.kbmSelesai ?: "15:30 WIB"})"
+                    }
                 }
             } catch (_: Exception) {
                 // Keep defaults
@@ -488,6 +514,7 @@ class ScannerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        laserAnimator?.cancel()
         if (::locationManager.isInitialized) {
             locationManager.removeUpdates(locationListener)
         }

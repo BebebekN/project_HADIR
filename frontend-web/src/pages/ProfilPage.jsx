@@ -16,6 +16,41 @@ import {
 import HadirLogo from '../components/HadirLogo';
 import { authApi, resolveAvatarUrl } from '../services/api';
 
+function ProfilAccordionRow({ icon, label, isOpen, onToggle, children }) {
+  const IconComp = icon;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="w-full py-3.5 px-2 -mx-2 rounded-2xl flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] hover:bg-[#f8f8fd] active:scale-[0.985] text-left transition-all duration-200 cursor-pointer"
+      >
+        <div className="flex items-center gap-3">
+          <IconComp className="w-5 h-5 text-[#0055ff]" />
+          <span>{label}</span>
+        </div>
+        <ChevronRight
+          className={`w-4 h-4 transition-transform duration-300 ${
+            isOpen ? 'rotate-90 text-[#0055ff]' : 'text-[#5d6367]'
+          }`}
+        />
+      </button>
+      <div className="accordion-panel" data-open={isOpen ? 'true' : 'false'}>
+        <div className="accordion-inner">
+          <div
+            className={`mb-2 py-3 px-4 bg-[#f8f8fd] rounded-2xl text-xs text-[#5d6367] transition-transform duration-300 ${
+              isOpen ? 'translate-y-0' : '-translate-y-1'
+            }`}
+          >
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownload }) {
   const [activeInfo, setActiveInfo] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -144,6 +179,11 @@ export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownlo
             <p className="text-[12px] font-mono text-white/85 mt-1">
               NIS/NIP: {user?.nis_nip}
             </p>
+            {user?.email && (
+              <p className="text-[11px] font-mono text-[#ddf8eb]/95 mt-0.5 break-all px-2">
+                {user.email}
+              </p>
+            )}
             <p className="text-[12px] text-white/90 mt-0.5 capitalize">
               {user?.role === 'orang_tua'
                 ? `Orang Tua dari ${user?.child_name || '-'} (${user?.kelas || 'XI PPLG 4'})`
@@ -235,50 +275,37 @@ export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownlo
               type="button"
               onClick={openFilePicker}
               disabled={uploading}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+              className="w-full py-3.5 px-2 -mx-2 rounded-2xl flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] hover:bg-[#f8f8fd] active:scale-[0.985] text-left transition-all duration-200 cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <Camera className="w-5 h-5 text-[#0055ff]" />
                 <span>Ubah / Ganti Foto Profil</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
+              <ChevronRight className="w-4 h-4 text-[#5d6367] transition-transform duration-200" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => toggleInfo('profil')}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+            <ProfilAccordionRow
+              icon={User}
+              label={`Detail Identitas (${user?.role?.toUpperCase()})`}
+              isOpen={activeInfo === 'profil'}
+              onToggle={() => toggleInfo('profil')}
             >
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-[#0055ff]" />
-                <span>Detail Identitas ({user?.role?.toUpperCase()})</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
-            </button>
-            {activeInfo === 'profil' && (
-              <div className="py-3 px-4 bg-[#f8f8fd] rounded-2xl text-xs text-[#5d6367] space-y-1">
+              <div className="space-y-1">
                 <div>Nama: <strong className="text-[#1b1b23]">{user?.nama_lengkap}</strong></div>
                 <div>NIS / NIP: <strong className="font-mono text-[#1b1b23]">{user?.nis_nip}</strong></div>
+                <div>Email Sekolah: <strong className="font-mono text-[#1b1b23]">{user?.email || '-'}</strong></div>
                 <div>Kelas: <strong className="text-[#1b1b23]">{user?.kelas || 'Guru / Pembimbing'}</strong></div>
               </div>
-            )}
+            </ProfilAccordionRow>
 
-            <button
-              type="button"
-              onClick={() => toggleInfo('keamanan')}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+            <ProfilAccordionRow
+              icon={Lock}
+              label="Keamanan Akun & Token Sanctum"
+              isOpen={activeInfo === 'keamanan'}
+              onToggle={() => toggleInfo('keamanan')}
             >
-              <div className="flex items-center gap-3">
-                <Lock className="w-5 h-5 text-[#0055ff]" />
-                <span>Keamanan Akun &amp; Token Sanctum</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
-            </button>
-            {activeInfo === 'keamanan' && (
-              <div className="py-3 px-4 bg-[#f8f8fd] rounded-2xl text-xs text-[#5d6367]">
-                Sesi autentikasi menggunakan Bearer Token Laravel Sanctum yang terhubung aman ke REST API HADIR.
-              </div>
-            )}
+              Sesi autentikasi menggunakan Bearer Token Laravel Sanctum dan login email sekolah yang terhubung aman ke REST API HADIR.
+            </ProfilAccordionRow>
           </div>
         </div>
 
@@ -287,50 +314,34 @@ export default function ProfilPage({ user, onLogout, onUserUpdated, onOpenDownlo
             Preferensi &amp; Informasi
           </h3>
           <div className="divide-y divide-[#e3e1ec]/60">
-            <button
-              type="button"
-              onClick={() => toggleInfo('aturan')}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+            <ProfilAccordionRow
+              icon={Bell}
+              label="Aturan Skor Kedisiplinan & Bintang PKL"
+              isOpen={activeInfo === 'aturan'}
+              onToggle={() => toggleInfo('aturan')}
             >
-              <div className="flex items-center gap-3">
-                <Bell className="w-5 h-5 text-[#0055ff]" />
-                <span>Aturan Skor Kedisiplinan &amp; Bintang PKL</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
-            </button>
-            {activeInfo === 'aturan' && (
-              <div className="py-3 px-4 bg-[#f8f8fd] rounded-2xl text-xs text-[#5d6367]">
-                Scan datang sebelum 07:00 WIB = Tepat Waktu (poin tetap). Lewat 07:00 WIB = Terlambat (-5 poin). Rating bintang: 95–100 (5.0★), 85–94 (4.0★), 75–84 (3.0★).
-              </div>
-            )}
+              Scan <strong>QR Datang</strong> sebelum 07:00 WIB = Tepat Waktu (poin tetap). Lewat 07:00 WIB = Terlambat (-5 poin). <strong>QR Pulang</strong> dibuka setelah scan QR Datang dan jam KBM hari tersebut selesai. Rating bintang: 95–100 (5.0★), 85–94 (4.0★), 75–84 (3.0★).
+            </ProfilAccordionRow>
 
-            <button
-              type="button"
-              onClick={() => toggleInfo('bantuan')}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+            <ProfilAccordionRow
+              icon={HelpCircle}
+              label="Bantuan Wali Kelas & Tata Usaha"
+              isOpen={activeInfo === 'bantuan'}
+              onToggle={() => toggleInfo('bantuan')}
             >
-              <div className="flex items-center gap-3">
-                <HelpCircle className="w-5 h-5 text-[#0055ff]" />
-                <span>Bantuan Wali Kelas &amp; Tata Usaha</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
-            </button>
-            {activeInfo === 'bantuan' && (
-              <div className="py-3 px-4 bg-[#f8f8fd] rounded-2xl text-xs text-[#5d6367]">
-                Wali Kelas XI PPLG 4: <strong>Firda Ayu Nirmala, S.Kom</strong> (SMK Telkom Purwokerto). Hubungi beliau atau Admin jika terjadi kendala pemindaian QR.
-              </div>
-            )}
+              Wali Kelas XI PPLG 4: <strong>Firda Ayu Nirmala, S.Kom</strong> (SMK Telkom Purwokerto). Hubungi beliau atau Admin jika terjadi kendala pemindaian QR.
+            </ProfilAccordionRow>
 
             <button
               type="button"
               onClick={onOpenDownload}
-              className="w-full py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] text-left transition-all cursor-pointer"
+              className="w-full py-3.5 px-2 -mx-2 rounded-2xl flex items-center justify-between text-[14px] text-[#1b1b23] hover:text-[#0055ff] hover:bg-[#f8f8fd] active:scale-[0.985] text-left transition-all duration-200 cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <Smartphone className="w-5 h-5 text-[#0055ff]" />
                 <span>Download Aplikasi Android &amp; iOS</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-[#5d6367]" />
+              <ChevronRight className="w-4 h-4 text-[#5d6367] transition-transform duration-200" />
             </button>
 
             <div className="py-3.5 flex items-center justify-between text-[14px] text-[#1b1b23]">

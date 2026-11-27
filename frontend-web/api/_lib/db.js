@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { neon } from '@neondatabase/serverless';
 import { GURUS, JADWALS, SISWAS } from './seedData.js';
-import { getJakartaNow, getPredikat } from './time.js';
+import { ATTENDANCE_CONFIG, defaultEmailFor, getJakartaNow, getPredikat } from './time.js';
 
 let _sql = null;
 let _initPromise = null;
@@ -57,6 +57,19 @@ async function initSchemaAndSeed(sql) {
   await sql`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS child_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
   `;
+  await sql`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(191)
+  `;
+  await sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx ON users (email) WHERE email IS NOT NULL
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      email VARCHAR(255) PRIMARY KEY,
+      token VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NULL DEFAULT NOW()
+    )
+  `;
 
   await sql`
     CREATE TABLE IF NOT EXISTS jadwals (
@@ -105,6 +118,8 @@ async function initSchemaAndSeed(sql) {
   await sql`ALTER TABLE presensis ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL DEFAULT NOW()`;
   await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NULL DEFAULT NOW()`;
   await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NULL DEFAULT NOW()`;
+  await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS token_datang VARCHAR(64)`;
+  await sql`ALTER TABLE daily_qr_tokens ADD COLUMN IF NOT EXISTS token_pulang VARCHAR(64)`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS api_tokens (
@@ -122,15 +137,15 @@ async function initSchemaAndSeed(sql) {
     const siswaHash = bcrypt.hashSync('siswa123', 8);
 
     await sql`
-      INSERT INTO users (nis_nip, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
-      VALUES ('admin', 'Administrator HADIR', NULL, 'admin', ${adminHash}, 100, 5.0)
+      INSERT INTO users (nis_nip, email, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
+      VALUES ('admin', ${defaultEmailFor('admin', 'admin')}, 'Administrator HADIR', NULL, 'admin', ${adminHash}, 100, 5.0)
       ON CONFLICT (nis_nip) DO NOTHING
     `;
 
     for (const g of GURUS) {
       await sql`
-        INSERT INTO users (nis_nip, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
-        VALUES (${g.nis_nip}, ${g.nama_lengkap}, NULL, 'guru', ${guruHash}, 100, 5.0)
+        INSERT INTO users (nis_nip, email, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
+        VALUES (${g.nis_nip}, ${defaultEmailFor(g.nis_nip, 'guru')}, ${g.nama_lengkap}, NULL, 'guru', ${guruHash}, 100, 5.0)
         ON CONFLICT (nis_nip) DO NOTHING
       `;
     }
@@ -139,9 +154,9 @@ async function initSchemaAndSeed(sql) {
     for (const s of SISWAS) {
       const isLateSample = s.nis_nip === '541251254';
       const rows = await sql`
-        INSERT INTO users (nis_nip, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
-        VALUES (${s.nis_nip}, ${s.nama_lengkap}, 'XI PPLG 4', 'siswa', ${siswaHash}, ${isLateSample ? 95 : 100}, 5.0)
-        ON CONFLICT (nis_nip) DO UPDATE SET nama_lengkap = EXCLUDED.nama_lengkap
+        INSERT INTO users (nis_nip, email, nama_lengkap, kelas, role, password, poin_kedisiplinan, bintang)
+        VALUES (${s.nis_nip}, ${defaultEmailFor(s.nis_nip, 'siswa')}, ${s.nama_lengkap}, 'XI PPLG 4', 'siswa', ${siswaHash}, ${isLateSample ? 95 : 100}, 5.0)
+        ON CONFLICT (nis_nip) DO UPDATE SET nama_lengkap = EXCLUDED.nama_lengkap, email = COALESCE(users.email, EXCLUDED.email)
         RETURNING id, nis_nip, nama_lengkap
       `;
       const student = rows[0];
@@ -150,8 +165,8 @@ async function initSchemaAndSeed(sql) {
       const doubleNis = `${s.nis_nip}${s.nis_nip}`;
       const parentHash = `sha256:${crypto.createHash('sha256').update(doubleNis).digest('hex')}`;
       await sql`
-        INSERT INTO users (nis_nip, nama_lengkap, kelas, child_user_id, role, password, poin_kedisiplinan, bintang)
-        VALUES (${doubleNis}, ${'Orang Tua ' + s.nama_lengkap}, 'XI PPLG 4', ${student.id}, 'orang_tua', ${parentHash}, 100, 5.0)
+        INSERT INTO users (nis_nip, email, nama_lengkap, kelas, child_user_id, role, password, poin_kedisiplinan, bintang)
+        VALUES (${doubleNis}, ${defaultEmailFor(doubleNis, 'orang_tua')}, ${'Orang Tua ' + s.nama_lengkap}, 'XI PPLG 4', ${student.id}, 'orang_tua', ${parentHash}, 100, 5.0)
         ON CONFLICT (nis_nip) DO NOTHING
       `;
     }
@@ -184,13 +199,124 @@ async function initSchemaAndSeed(sql) {
     }
   }
 
-  const jakartaNow = getJakartaNow();
-  const tokenToday = `HADIR-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
-  await sql`
-    INSERT INTO daily_qr_tokens (tanggal, token, jam_mulai, jam_selesai)
-    VALUES (${jakartaNow.dateStr}, ${tokenToday}, '06:00:00', '17:00:00')
-    ON CONFLICT (tanggal) DO NOTHING
+  // Backfill school emails for existing users without overwriting customized values
+  const usersWithoutEmail = await sql`
+    SELECT id, nis_nip, role FROM users WHERE email IS NULL OR email = ''
   `;
+  for (const u of usersWithoutEmail) {
+    const derivedEmail = defaultEmailFor(u.nis_nip, u.role);
+    try {
+      await sql`
+        UPDATE users SET email = ${derivedEmail} WHERE id = ${u.id} AND (email IS NULL OR email = '')
+      `;
+    } catch {
+      // Ignore unique conflict on concurrent cold starts
+    }
+  }
+
+  // Backfill paired Datang / Pulang tokens on any existing QR rows missing them
+  const missingPairRows = await sql`
+    SELECT id, token, token_datang, token_pulang
+    FROM daily_qr_tokens
+    WHERE token_datang IS NULL OR token_datang = '' OR token_pulang IS NULL OR token_pulang = ''
+  `;
+  for (const row of missingPairRows) {
+    const pair = generatePairedTokens();
+    const datang = row.token_datang || row.token || pair.token_datang;
+    const pulang = row.token_pulang || pair.token_pulang;
+    await sql`
+      UPDATE daily_qr_tokens
+      SET token = ${row.token || datang}, token_datang = ${datang}, token_pulang = ${pulang}
+      WHERE id = ${row.id}
+    `;
+  }
+
+  const jakartaNow = getJakartaNow();
+  await ensureTodayQrToken(sql, jakartaNow.dateStr);
+}
+
+export function generatePairedTokens() {
+  return {
+    token_datang: `HADIR-DTG-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+    token_pulang: `HADIR-PLG-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+  };
+}
+
+export async function ensureTodayQrToken(sql, dateStr = getJakartaNow().dateStr) {
+  const existing = await sql`
+    SELECT * FROM daily_qr_tokens WHERE tanggal = ${dateStr} LIMIT 1
+  `;
+  if (existing[0]) {
+    const row = existing[0];
+    if (!row.token_datang || !row.token_pulang || !row.token) {
+      const pair = generatePairedTokens();
+      const tokenDatang = row.token_datang || row.token || pair.token_datang;
+      const tokenPulang = row.token_pulang || pair.token_pulang;
+      const tokenLegacy = row.token || tokenDatang;
+      const updated = await sql`
+        UPDATE daily_qr_tokens
+        SET token = ${tokenLegacy}, token_datang = ${tokenDatang}, token_pulang = ${tokenPulang}, updated_at = NOW()
+        WHERE id = ${row.id}
+        RETURNING *
+      `;
+      return updated[0] || { ...row, token: tokenLegacy, token_datang: tokenDatang, token_pulang: tokenPulang };
+    }
+    return row;
+  }
+
+  const pair = generatePairedTokens();
+  const inserted = await sql`
+    INSERT INTO daily_qr_tokens (tanggal, token, token_datang, token_pulang, jam_mulai, jam_selesai)
+    VALUES (${dateStr}, ${pair.token_datang}, ${pair.token_datang}, ${pair.token_pulang}, '06:00:00', '17:00:00')
+    ON CONFLICT (tanggal) DO NOTHING
+    RETURNING *
+  `;
+  if (inserted[0]) return inserted[0];
+
+  const fallback = await sql`SELECT * FROM daily_qr_tokens WHERE tanggal = ${dateStr} LIMIT 1`;
+  return fallback[0];
+}
+
+export async function regenerateTodayQrToken(sql, dateStr = getJakartaNow().dateStr) {
+  const pair = generatePairedTokens();
+  const rows = await sql`
+    INSERT INTO daily_qr_tokens (tanggal, token, token_datang, token_pulang, jam_mulai, jam_selesai)
+    VALUES (${dateStr}, ${pair.token_datang}, ${pair.token_datang}, ${pair.token_pulang}, '06:00:00', '17:00:00')
+    ON CONFLICT (tanggal) DO UPDATE SET
+      token = EXCLUDED.token,
+      token_datang = EXCLUDED.token_datang,
+      token_pulang = EXCLUDED.token_pulang,
+      updated_at = NOW()
+    RETURNING *
+  `;
+  return rows[0];
+}
+
+export async function resolveKbmEndForSubject(sql, subject, jakartaNow = getJakartaNow()) {
+  let maxJam = null;
+  if (subject?.kelas && !jakartaNow.isWeekend) {
+    const rows = await sql`
+      SELECT MAX(jam_selesai) AS max_jam
+      FROM jadwals
+      WHERE kelas = ${subject.kelas} AND hari = ${jakartaNow.hari}
+    `;
+    maxJam = rows[0]?.max_jam || null;
+  }
+
+  if (!maxJam && !jakartaNow.isWeekend) {
+    const anyRows = await sql`
+      SELECT MAX(jam_selesai) AS max_jam FROM jadwals WHERE hari = ${jakartaNow.hari}
+    `;
+    maxJam = anyRows[0]?.max_jam || null;
+  }
+
+  const rawEnd = maxJam || ATTENDANCE_CONFIG.defaultKbmEnd || '15:30';
+  const kbmEndHis = String(rawEnd).length === 5 ? `${rawEnd}:00` : String(rawEnd);
+  return {
+    kbmSelesaiHis: kbmEndHis,
+    kbmSelesai: kbmEndHis.slice(0, 5),
+    kbmSudahSelesai: jakartaNow.hhmmss >= kbmEndHis,
+  };
 }
 
 export function verifyPassword(plain, stored) {
@@ -223,6 +349,7 @@ export function formatUserPayload(user, subject, origin) {
   return {
     id: user.id,
     nis_nip: user.nis_nip,
+    email: user.email || defaultEmailFor(user.nis_nip, user.role),
     nama_lengkap: user.nama_lengkap,
     kelas: subject.kelas || null,
     role: user.role,

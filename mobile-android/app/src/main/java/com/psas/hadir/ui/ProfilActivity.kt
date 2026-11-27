@@ -7,7 +7,11 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.view.animation.DecelerateInterpolator
+import android.widget.ImageView
 import android.widget.Toast
+import androidx.transition.AutoTransition
+import androidx.transition.TransitionManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -127,6 +131,7 @@ class ProfilActivity : AppCompatActivity() {
             binding.tvProfilInitials.text = initials
             binding.tvProfilNama.text = user.namaLengkap
             binding.tvProfilNis.text = "NIS/NIP: ${user.nisNip}"
+            binding.tvProfilEmail.text = user.email ?: "${user.nisNip}@student.smktelkom-pwt.sch.id"
             binding.tvProfilHeaderSubtitle.text = "${user.nisNip} • ${user.kelas ?: user.role}"
             binding.tvProfilKelas.text = when {
                 user.role == "orang_tua" ->
@@ -140,6 +145,7 @@ class ProfilActivity : AppCompatActivity() {
             binding.tvRowIdentitasTitle.text = "Detail Identitas (${user.role.uppercase()})"
             binding.tvDetailNama.text = "Nama: ${user.namaLengkap}"
             binding.tvDetailNis.text = "NIS / NIP: ${user.nisNip}"
+            binding.tvDetailEmail.text = "Email Sekolah: ${user.email ?: "-"}"
             binding.tvDetailKelas.text = "Kelas: ${user.kelas ?: "Guru / Pembimbing"}"
 
             val avatarUrl = sessionManager.resolveAvatarUrl(user)
@@ -296,25 +302,59 @@ class ProfilActivity : AppCompatActivity() {
     }
 
     private fun setupAccordions() {
-        val allPanels = listOf(
-            binding.layoutDetailIdentitas,
-            binding.layoutDetailKeamanan,
-            binding.layoutDetailAturan,
-            binding.layoutDetailNotif,
-            binding.layoutDetailBantuan
+        val entries = listOf(
+            Pair(binding.layoutDetailIdentitas, binding.ivChevronIdentitas),
+            Pair(binding.layoutDetailKeamanan, binding.ivChevronKeamanan),
+            Pair(binding.layoutDetailAturan, binding.ivChevronAturan),
+            Pair(binding.layoutDetailNotif, binding.ivChevronNotif),
+            Pair(binding.layoutDetailBantuan, binding.ivChevronBantuan)
         )
-        bindAccordionRow(binding.rowProfilIdentitas, binding.layoutDetailIdentitas, allPanels)
-        bindAccordionRow(binding.rowKeamananAkun, binding.layoutDetailKeamanan, allPanels)
-        bindAccordionRow(binding.rowAturanSkor, binding.layoutDetailAturan, allPanels)
-        bindAccordionRow(binding.rowNotifReminder, binding.layoutDetailNotif, allPanels)
-        bindAccordionRow(binding.rowBantuanWali, binding.layoutDetailBantuan, allPanels)
+        bindAccordionRow(binding.rowProfilIdentitas, binding.layoutDetailIdentitas, binding.ivChevronIdentitas, entries)
+        bindAccordionRow(binding.rowKeamananAkun, binding.layoutDetailKeamanan, binding.ivChevronKeamanan, entries)
+        bindAccordionRow(binding.rowAturanSkor, binding.layoutDetailAturan, binding.ivChevronAturan, entries)
+        bindAccordionRow(binding.rowNotifReminder, binding.layoutDetailNotif, binding.ivChevronNotif, entries)
+        bindAccordionRow(binding.rowBantuanWali, binding.layoutDetailBantuan, binding.ivChevronBantuan, entries)
+
+        listOf(binding.rowGantiFoto, binding.rowServerConfig).forEach { row ->
+            row.setOnTouchListener { v, event ->
+                when (event.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.98f).scaleY(0.98f).setDuration(90).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                        v.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
+                }
+                false
+            }
+        }
     }
 
-    private fun bindAccordionRow(row: View, targetPanel: View, allPanels: List<View>) {
+    private fun bindAccordionRow(
+        row: View,
+        targetPanel: View,
+        targetChevron: ImageView,
+        allEntries: List<Pair<View, ImageView>>
+    ) {
         row.setOnClickListener {
+            row.animate()
+                .scaleX(0.98f)
+                .scaleY(0.98f)
+                .setDuration(90)
+                .withEndAction {
+                    row.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+                }
+                .start()
+
+            val transition = AutoTransition().apply {
+                duration = 240
+                interpolator = DecelerateInterpolator()
+            }
+            TransitionManager.beginDelayedTransition(binding.profilContentContainer, transition)
+
             val shouldOpen = targetPanel.visibility != View.VISIBLE
-            allPanels.forEach { it.visibility = View.GONE }
-            targetPanel.visibility = if (shouldOpen) View.VISIBLE else View.GONE
+            allEntries.forEach { (panel, chevron) ->
+                val openThis = shouldOpen && panel == targetPanel
+                panel.visibility = if (openThis) View.VISIBLE else View.GONE
+                chevron.animate().rotation(if (openThis) 90f else 0f).setDuration(220).start()
+            }
         }
     }
 

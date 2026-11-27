@@ -22,6 +22,7 @@ class User extends Authenticatable implements FilamentUser, HasName
      */
     protected $fillable = [
         'nis_nip',
+        'email',
         'nama_lengkap',
         'kelas',
         'avatar_path',
@@ -51,11 +52,32 @@ class User extends Authenticatable implements FilamentUser, HasName
 
     protected static function booted(): void
     {
+        static::creating(function (User $user): void {
+            if (empty($user->email) && !empty($user->nis_nip)) {
+                $user->email = self::defaultEmailFor((string) $user->nis_nip, (string) ($user->role ?? 'siswa'));
+            }
+        });
+
         static::created(function (User $user): void {
             if ($user->role === 'siswa') {
                 self::syncParentAccountForStudent($user);
             }
         });
+    }
+
+    public static function defaultEmailFor(string $nisNip, string $role = 'siswa'): string
+    {
+        $clean = strtolower(trim($nisNip));
+        $studentDomain = (string) config('hadir.email.student_domain', 'student.smktelkom-pwt.sch.id');
+        $staffDomain = (string) config('hadir.email.staff_domain', 'smktelkom-pwt.sch.id');
+        $parentDomain = (string) config('hadir.email.parent_domain', 'parent.smktelkom-pwt.sch.id');
+
+        return match ($role) {
+            'siswa' => "{$clean}@{$studentDomain}",
+            'orang_tua' => "{$clean}@{$parentDomain}",
+            'admin' => $clean === 'admin' ? "admin@{$staffDomain}" : "{$clean}@{$staffDomain}",
+            default => "{$clean}@{$staffDomain}",
+        };
     }
 
     /**
@@ -64,6 +86,7 @@ class User extends Authenticatable implements FilamentUser, HasName
     public static function syncParentAccountForStudent(User $student): User
     {
         $doubleNis = $student->nis_nip . $student->nis_nip;
+        $parentEmail = self::defaultEmailFor($doubleNis, 'orang_tua');
         $existing = self::where('child_user_id', $student->id)
             ->orWhere('nis_nip', $doubleNis)
             ->first();
@@ -71,6 +94,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         if ($existing) {
             $existing->update([
                 'nis_nip' => $doubleNis,
+                'email' => $existing->email ?: $parentEmail,
                 'nama_lengkap' => 'Orang Tua ' . $student->nama_lengkap,
                 'kelas' => $student->kelas,
                 'role' => 'orang_tua',
@@ -81,6 +105,7 @@ class User extends Authenticatable implements FilamentUser, HasName
 
         return self::create([
             'nis_nip' => $doubleNis,
+            'email' => $parentEmail,
             'nama_lengkap' => 'Orang Tua ' . $student->nama_lengkap,
             'kelas' => $student->kelas,
             'child_user_id' => $student->id,
@@ -178,6 +203,7 @@ class User extends Authenticatable implements FilamentUser, HasName
         return [
             'id' => $this->id,
             'nis_nip' => $this->nis_nip,
+            'email' => $this->email ?: self::defaultEmailFor((string) $this->nis_nip, (string) $this->role),
             'nama_lengkap' => $this->nama_lengkap,
             'kelas' => $subject->kelas,
             'role' => $this->role,

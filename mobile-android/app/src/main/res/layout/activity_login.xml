@@ -106,13 +106,13 @@
                 android:textColor="@color/text_muted"
                 android:textSize="13sp" />
 
-            <!-- NIS / NIP Field -->
+            <!-- School Email / ID Field -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
                 android:layout_marginBottom="8dp"
-                android:text="NIS / NIP / ID Orang Tua (Double NIS)"
+                android:text="Email Sekolah / ID Orang Tua (Double NIS)"
                 android:textColor="@color/text_primary"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -137,8 +137,8 @@
                     android:id="@+id/etNisNip"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
-                    android:hint="Contoh: 541251041"
-                    android:inputType="text"
+                    android:hint="541251185@student.smktelkom-pwt.sch.id"
+                    android:inputType="textEmailAddress"
                     android:paddingVertical="12dp"
                     android:textColor="@color/text_primary"
                     android:textColorHint="@color/slate_400"
@@ -193,7 +193,7 @@
                 android:layout_gravity="end"
                 android:layout_marginTop="10dp"
                 android:paddingVertical="4dp"
-                android:text="Lupa Password?"
+                android:text="Lupa Kata Sandi?"
                 android:textColor="@color/brand_blue"
                 android:textSize="12sp"
                 android:textStyle="bold" />

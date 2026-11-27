@@ -72,6 +72,7 @@
             android:paddingBottom="108dp">
 
             <LinearLayout
+                android:id="@+id/profilContentContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
@@ -159,6 +160,17 @@
                         android:text="NIS/NIP: 541251185"
                         android:textColor="#E2E8F0"
                         android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvProfilEmail"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:gravity="center"
+                        android:text="541251185@student.smktelkom-pwt.sch.id"
+                        android:textColor="#DDF8EB"
+                        android:textSize="11sp" />
 
                     <TextView
                         android:id="@+id/tvProfilKelas"
@@ -357,6 +369,7 @@
                             android:textSize="14sp" />
 
                         <ImageView
+                            android:id="@+id/ivChevronIdentitas"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
                             android:src="@drawable/ic_chevron_right"
@@ -388,6 +401,16 @@
                             android:layout_marginTop="4dp"
                             android:fontFamily="monospace"
                             android:text="NIS / NIP: -"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/tvDetailEmail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="monospace"
+                            android:text="Email Sekolah: -"
                             android:textColor="@color/text_primary"
                             android:textSize="12sp" />
 
@@ -432,6 +455,7 @@
                             android:textSize="14sp" />
 
                         <ImageView
+                            android:id="@+id/ivChevronKeamanan"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
                             android:src="@drawable/ic_chevron_right"
@@ -554,6 +578,7 @@
                             android:textSize="14sp" />
 
                         <ImageView
+                            android:id="@+id/ivChevronAturan"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
                             android:src="@drawable/ic_chevron_right"
@@ -574,7 +599,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:lineSpacingExtra="2dp"
-                            android:text="Scan datang sebelum 07:00 WIB = Tepat Waktu (poin tetap). Lewat 07:00 WIB = Terlambat (-5 poin). Rating bintang: 95–100 (5.0★), 85–94 (4.0★), 75–84 (3.0★)."
+                            android:text="Scan QR Datang sebelum 07:00 WIB = Tepat Waktu (poin tetap). Lewat 07:00 WIB = Terlambat (-5 poin). QR Pulang dibuka setelah scan QR Datang &amp; jam KBM selesai. Rating bintang: 95–100 (5.0★), 85–94 (4.0★), 75–84 (3.0★)."
                             android:textColor="@color/text_muted"
                             android:textSize="12sp" />
                     </LinearLayout>
@@ -610,6 +635,7 @@
                             android:textSize="14sp" />
 
                         <ImageView
+                            android:id="@+id/ivChevronNotif"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
                             android:src="@drawable/ic_chevron_right"
@@ -680,6 +706,7 @@
                             android:textSize="14sp" />
 
                         <ImageView
+                            android:id="@+id/ivChevronBantuan"
                             android:layout_width="18dp"
                             android:layout_height="18dp"
                             android:src="@drawable/ic_chevron_right"

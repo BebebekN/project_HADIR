@@ -2,15 +2,21 @@ package com.psas.hadir.ui
 
 import android.content.Intent
 import android.os.Bundle
+import android.text.InputType
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.gson.Gson
 import com.psas.hadir.data.api.RetrofitClient
 import com.psas.hadir.data.model.ApiResponse
+import com.psas.hadir.data.model.ForgotPasswordRequest
 import com.psas.hadir.data.model.LoginRequest
 import com.psas.hadir.data.model.LoginData
+import com.psas.hadir.data.model.ResetPasswordRequest
 import com.psas.hadir.databinding.ActivityLoginBinding
 import com.psas.hadir.utils.SessionManager
 import kotlinx.coroutines.CancellationException
@@ -42,13 +48,13 @@ class LoginActivity : AppCompatActivity() {
         }
 
         binding.btnDemoSiswa.setOnClickListener {
-            binding.etNisNip.setText("541251041")
+            binding.etNisNip.setText("541251185@student.smktelkom-pwt.sch.id")
             binding.etPassword.setText("siswa123")
             binding.tvError.visibility = View.GONE
         }
 
         binding.btnDemoGuru.setOnClickListener {
-            binding.etNisNip.setText("198804122015032003")
+            binding.etNisNip.setText("198804122015032003@smktelkom-pwt.sch.id")
             binding.etPassword.setText("guru123")
             binding.tvError.visibility = View.GONE
         }
@@ -72,14 +78,150 @@ class LoginActivity : AppCompatActivity() {
         }
 
         binding.tvForgotPassword.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Panduan Akun & Reset Sandi")
-                .setMessage(
-                    "• Orang Tua: Login memakai Double NIS anak (contoh: 541251041541251041) sebagai ID & Kata Sandi.\n" +
-                        "• Siswa/Guru: Hubungi Wali Kelas XI PPLG 4 (Firda Ayu Nirmala, S.Kom) atau Admin SMK Telkom Purwokerto untuk reset kata sandi."
-                )
-                .setPositiveButton("Mengerti", null)
-                .show()
+            showForgotPasswordDialog()
+        }
+    }
+
+    private fun showForgotPasswordDialog() {
+        val currentText = binding.etNisNip.text?.toString()?.trim().orEmpty()
+        val guessedEmail = when {
+            currentText.contains("@") -> currentText
+            currentText.matches(Regex("^\\d{6,12}$")) -> "$currentText@student.smktelkom-pwt.sch.id"
+            else -> ""
+        }
+
+        val emailInput = EditText(this).apply {
+            hint = "541251185@student.smktelkom-pwt.sch.id"
+            inputType = InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            setText(guessedEmail)
+            setPadding(40, 28, 40, 28)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Reset Kata Sandi via Email Sekolah")
+            .setMessage("Masukkan email sekolah (@student.smktelkom-pwt.sch.id). Kode verifikasi 6 digit akan dikirimkan ke email Anda.")
+            .setView(emailInput)
+            .setNegativeButton("Batal", null)
+            .setPositiveButton("Kirim Kode") { _, _ ->
+                val targetEmail = emailInput.text.toString().trim()
+                if (targetEmail.isEmpty() || !targetEmail.contains("@")) {
+                    Toast.makeText(this, "Masukkan email sekolah yang valid.", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                sendForgotPasswordRequest(targetEmail)
+            }
+            .show()
+    }
+
+    private fun sendForgotPasswordRequest(email: String) {
+        setLoading(true)
+        lifecycleScope.launch {
+            try {
+                val res = RetrofitClient.getService(this@LoginActivity)
+                    .forgotPassword(ForgotPasswordRequest(email))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    Toast.makeText(
+                        this@LoginActivity,
+                        res.body()?.message ?: "Kode OTP telah dikirim ke $email",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    showResetCodeDialog(email)
+                } else {
+                    val err = parseErrorMessage(res.errorBody()?.string())
+                        ?: "Gagal mengirim kode reset ke email."
+                    AlertDialog.Builder(this@LoginActivity)
+                        .setTitle("Reset Kata Sandi")
+                        .setMessage(err)
+                        .setPositiveButton("Tutup", null)
+                        .show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@LoginActivity,
+                    "Gagal menghubungi server: ${e.message ?: "Coba lagi"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                setLoading(false)
+            }
+        }
+    }
+
+    private fun showResetCodeDialog(email: String) {
+        val codeInput = EditText(this).apply {
+            hint = "Kode OTP 6 digit dari email"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setPadding(40, 24, 40, 24)
+        }
+        val passInput = EditText(this).apply {
+            hint = "Kata sandi baru (minimal 6 karakter)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(40, 24, 40, 24)
+        }
+        val confirmInput = EditText(this).apply {
+            hint = "Konfirmasi kata sandi baru"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(40, 24, 40, 24)
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(36, 12, 36, 8)
+            addView(codeInput)
+            addView(passInput)
+            addView(confirmInput)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Verifikasi Kode Email")
+            .setMessage("Masukkan kode 6 digit yang dikirim ke $email dan kata sandi baru Anda.")
+            .setView(container)
+            .setNegativeButton("Batal", null)
+            .setPositiveButton("Simpan Sandi") { _, _ ->
+                val code = codeInput.text.toString().trim()
+                val newPass = passInput.text.toString()
+                val confirmPass = confirmInput.text.toString()
+                if (code.length != 6 || newPass.length < 6 || newPass != confirmPass) {
+                    Toast.makeText(
+                        this,
+                        "Pastikan kode 6 digit benar, sandi min. 6 karakter, dan konfirmasi cocok.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@setPositiveButton
+                }
+                submitResetPassword(email, code, newPass, confirmPass)
+            }
+            .show()
+    }
+
+    private fun submitResetPassword(email: String, code: String, newPass: String, confirmPass: String) {
+        setLoading(true)
+        lifecycleScope.launch {
+            try {
+                val res = RetrofitClient.getService(this@LoginActivity)
+                    .resetPassword(ResetPasswordRequest(email, code, newPass, confirmPass))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    binding.etNisNip.setText(email)
+                    binding.etPassword.setText("")
+                    Toast.makeText(
+                        this@LoginActivity,
+                        res.body()?.message ?: "Kata sandi berhasil diperbarui!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    val err = parseErrorMessage(res.errorBody()?.string())
+                        ?: "Kode OTP salah atau sudah kedaluwarsa."
+                    Toast.makeText(this@LoginActivity, err, Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@LoginActivity,
+                    "Gagal menghubungi server: ${e.message ?: "Coba lagi"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } finally {
+                setLoading(false)
+            }
         }
     }
 
@@ -135,7 +277,7 @@ class LoginActivity : AppCompatActivity() {
         nisNip: String,
         password: String
     ): Response<ApiResponse<LoginData>> {
-        return RetrofitClient.getService(this).login(LoginRequest(nisNip, password))
+        return RetrofitClient.getService(this).login(LoginRequest(nisNip, nisNip, password))
     }
 
     /**

@@ -29,7 +29,20 @@ export const SCHOOL_CONFIG = {
 export const ATTENDANCE_CONFIG = {
   checkInDeadline: process.env.HADIR_CHECKIN_DEADLINE || '07:00',
   warningMinutesBefore: Number(process.env.HADIR_WARNING_MINUTES_BEFORE || 10),
+  defaultKbmEnd: process.env.HADIR_DEFAULT_KBM_END || '15:30',
 };
+
+export function defaultEmailFor(nisNip, role = 'siswa') {
+  const clean = String(nisNip || '').trim().toLowerCase();
+  const studentDomain = process.env.HADIR_STUDENT_EMAIL_DOMAIN || 'student.smktelkom-pwt.sch.id';
+  const staffDomain = process.env.HADIR_STAFF_EMAIL_DOMAIN || 'smktelkom-pwt.sch.id';
+  const parentDomain = process.env.HADIR_PARENT_EMAIL_DOMAIN || 'parent.smktelkom-pwt.sch.id';
+
+  if (role === 'siswa') return `${clean}@${studentDomain}`;
+  if (role === 'orang_tua') return `${clean}@${parentDomain}`;
+  if (role === 'admin' && clean === 'admin') return `admin@${staffDomain}`;
+  return `${clean}@${staffDomain}`;
+}
 
 export function getJakartaNow() {
   const now = new Date();

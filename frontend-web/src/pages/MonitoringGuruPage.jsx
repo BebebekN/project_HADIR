@@ -22,21 +22,34 @@ export default function MonitoringGuruPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [qrInfo, setQrInfo] = useState(null);
-  const [qrImg, setQrImg] = useState('');
+  const [qrImgDatang, setQrImgDatang] = useState('');
+  const [qrImgPulang, setQrImgPulang] = useState('');
   const [qrBusy, setQrBusy] = useState(false);
 
   const loadQr = useCallback(async (regenerate = false) => {
     try {
       setQrBusy(true);
       const res = regenerate ? await adminApi.regenerateQr() : await adminApi.getQr();
-      if (res.success && res.data?.payload) {
+      if (res.success && res.data) {
         setQrInfo(res.data);
-        const url = await QRCode.toDataURL(res.data.payload, {
-          width: 220,
-          margin: 1,
-          color: { dark: '#122B51', light: '#FFFFFF' },
-        });
-        setQrImg(url);
+        const datangPayload = res.data.payload_datang || res.data.payload;
+        const pulangPayload = res.data.payload_pulang;
+        if (datangPayload) {
+          const urlDatang = await QRCode.toDataURL(datangPayload, {
+            width: 240,
+            margin: 1,
+            color: { dark: '#065f46', light: '#FFFFFF' },
+          });
+          setQrImgDatang(urlDatang);
+        }
+        if (pulangPayload) {
+          const urlPulang = await QRCode.toDataURL(pulangPayload, {
+            width: 240,
+            margin: 1,
+            color: { dark: '#122B51', light: '#FFFFFF' },
+          });
+          setQrImgPulang(urlPulang);
+        }
       }
     } catch {
       // Optional on local PHP backend if route not mounted
@@ -158,43 +171,82 @@ export default function MonitoringGuruPage() {
         </div>
       </div>
 
-      {/* QR Presensi Hari Ini (Tampil di Cloud Vercel untuk di-scan Siswa) */}
-      {qrInfo?.token && (
-        <div className="bg-white rounded-[24px] p-5 sm:p-6 border border-[#e3e1ec]/70 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-5 print:hidden">
-          <div className="flex items-center gap-4">
-            {qrImg ? (
-              <img
-                src={qrImg}
-                alt="QR Presensi Hari Ini"
-                className="w-28 h-28 rounded-2xl border border-[#e3e1ec] p-1.5 bg-white shrink-0"
-              />
-            ) : (
-              <div className="w-28 h-28 rounded-2xl bg-[#f0f0ff] flex items-center justify-center shrink-0">
-                <QrCode className="w-10 h-10 text-[#0055ff]" />
-              </div>
-            )}
-            <div className="space-y-1">
+      {/* Pasangan QR Datang & QR Pulang Hari Ini (Tampil di Cloud Vercel untuk di-scan Siswa) */}
+      {(qrInfo?.token_datang || qrInfo?.token) && (
+        <div className="bg-white rounded-[24px] p-5 sm:p-6 border border-[#e3e1ec]/70 shadow-xs space-y-5 print:hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
               <div className="text-[11px] font-bold uppercase tracking-wider text-[#0055ff]">
-                QR Presensi Resmi Hari Ini ({qrInfo.tanggal_label || qrInfo.tanggal})
+                Pasangan QR Presensi Resmi ({qrInfo.tanggal_label || qrInfo.tanggal})
               </div>
-              <div className="text-[18px] font-mono font-bold text-[#122B51]">
-                {qrInfo.token}
-              </div>
-              <p className="text-[12px] text-[#5d6367]">
-                Berlaku pukul {qrInfo.jam_mulai}–{qrInfo.jam_selesai} WIB di kawasan SMK Telkom Purwokerto.
+              <p className="text-[12px] text-[#5d6367] mt-0.5">
+                Berlaku pukul {qrInfo.jam_mulai}–{qrInfo.jam_selesai} WIB • QR Pulang aktif setelah KBM selesai ({qrInfo.kbm_selesai || '15:30 WIB'}).
               </p>
             </div>
+            <button
+              type="button"
+              disabled={qrBusy}
+              onClick={() => loadQr(true)}
+              className="px-5 py-2.5 rounded-full bg-[#f0f0ff] hover:bg-[#e2e5ff] text-[#0055ff] text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${qrBusy ? 'animate-spin' : ''}`} />
+              <span>Buat Pasangan QR Baru</span>
+            </button>
           </div>
 
-          <button
-            type="button"
-            disabled={qrBusy}
-            onClick={() => loadQr(true)}
-            className="px-5 py-2.5 rounded-full bg-[#f0f0ff] hover:bg-[#e2e5ff] text-[#0055ff] text-[12px] font-bold flex items-center gap-2 transition-all cursor-pointer shrink-0 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${qrBusy ? 'animate-spin' : ''}`} />
-            <span>Buat Token QR Baru</span>
-          </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* QR Datang */}
+            <div className="rounded-2xl border border-[#a7f3d0] bg-[#ecfdf5]/50 p-4 flex items-center gap-4">
+              {qrImgDatang ? (
+                <img
+                  src={qrImgDatang}
+                  alt="QR Code Datang Hari Ini"
+                  className="w-28 h-28 rounded-2xl border border-[#a7f3d0] p-1.5 bg-white shrink-0"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-2xl bg-white flex items-center justify-center shrink-0">
+                  <QrCode className="w-10 h-10 text-[#059669]" />
+                </div>
+              )}
+              <div className="space-y-1 min-w-0">
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#059669] text-white text-[10px] font-bold uppercase">
+                  1. QR Code Datang
+                </span>
+                <div className="text-[15px] font-mono font-bold text-[#065f46] break-all">
+                  {qrInfo.token_datang || qrInfo.token}
+                </div>
+                <p className="text-[11px] text-[#047857]">
+                  Dipindai siswa saat tiba di sekolah (&le; 07:00 WIB tepat waktu).
+                </p>
+              </div>
+            </div>
+
+            {/* QR Pulang */}
+            <div className="rounded-2xl border border-[#bfdbfe] bg-[#eff6ff]/60 p-4 flex items-center gap-4">
+              {qrImgPulang ? (
+                <img
+                  src={qrImgPulang}
+                  alt="QR Code Pulang Hari Ini"
+                  className="w-28 h-28 rounded-2xl border border-[#bfdbfe] p-1.5 bg-white shrink-0"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-2xl bg-white flex items-center justify-center shrink-0">
+                  <QrCode className="w-10 h-10 text-[#0055ff]" />
+                </div>
+              )}
+              <div className="space-y-1 min-w-0">
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#0055ff] text-white text-[10px] font-bold uppercase">
+                  2. QR Code Pulang
+                </span>
+                <div className="text-[15px] font-mono font-bold text-[#122B51] break-all">
+                  {qrInfo.token_pulang || '-'}
+                </div>
+                <p className="text-[11px] text-[#1e40af]">
+                  Aktif setelah siswa scan QR Datang &amp; KBM berakhir ({qrInfo.kbm_selesai || '15:30 WIB'}).
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
