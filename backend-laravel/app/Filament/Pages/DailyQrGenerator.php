@@ -83,6 +83,8 @@ class DailyQrGenerator extends Page
                 'eccLevel' => QRCode::ECC_M,
                 'addQuietzone' => true,
                 'svgUseFill' => true,
+                'drawLightModules' => false,
+                'outputBase64' => true,
             ]);
 
             $payload = json_encode([

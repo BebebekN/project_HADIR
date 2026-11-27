@@ -75,10 +75,36 @@
         justify-content: center;
         align-items: center;
     }
-    .psas-qr-frame svg {
-        width: 240px;
-        height: 240px;
+    .psas-qr-frame svg,
+    .psas-qr-frame img {
+        width: 220px;
+        height: 220px;
+        max-width: 100%;
         display: block;
+    }
+    .psas-heading {
+        color: #0f172a;
+    }
+    .dark .psas-heading {
+        color: #f8fafc;
+    }
+    .psas-muted {
+        color: #64748b;
+    }
+    .dark .psas-muted {
+        color: #94a3b8;
+    }
+    .psas-school-accent {
+        color: #122B51;
+    }
+    .dark .psas-school-accent {
+        color: #5eead4;
+    }
+    .psas-row-divider {
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .dark .psas-row-divider {
+        border-bottom-color: #1f2937;
     }
     .psas-tip-card {
         background: linear-gradient(135deg, #122B51, #009B90);
